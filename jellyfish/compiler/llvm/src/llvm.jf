@@ -1,0 +1,4 @@
+
+function LLVMContextCreate():pointer import "LLVMContextCreate"
+function LLVMContextDispose(ctx:pointer) import "LLVMContextDispose"
+

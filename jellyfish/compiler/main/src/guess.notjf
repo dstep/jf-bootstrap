@@ -1,0 +1,29 @@
+function run()
+	var secret:i32 = Rand()
+	var maxSecret:i32 = 100
+	
+	secret = secret - secret / maxSecret * maxSecret + 1
+
+	var try = 0
+	var maxTry = 10
+	
+	
+	while try < maxTry do
+		Trace("This is attempt #" + IntToStr(try + 1))
+		Trace("There are " + IntToStr(maxTry - try) + " tries left")
+
+		var guess = StrToInt(ReadLn("Your guess? "))
+		if guess == secret then
+			Trace("You got it!")
+			return
+		elif guess < secret then
+			Trace("Not enough")
+		else
+			Trace("Too much")
+		end
+		
+		try = try + 1
+	end
+		
+	Trace("Unfortunately, you lost!")
+end

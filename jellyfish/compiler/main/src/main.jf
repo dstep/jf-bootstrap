@@ -1,0 +1,93 @@
+--Comments?
+--Comments!
+
+-- imports
+import llvm.llvm
+import core.prelude
+  
+-- functions
+
+function Rand():i32 import "rand"
+
+function remainder(x y:i32):i32 
+	return x - x / y * y
+end
+
+function rec_gcd(a b:i32):i32
+	if b == 0 then
+       return a
+    else
+       return rec_gcd(b, remainder(a, b))
+	end
+end
+
+function while_gcd(a b:i32):i32
+	while b <> 0 do
+       var t = b 
+       b = remainder(a, b) 
+       a = t
+	end
+    return a
+end
+
+function run()
+	Trace(IntToStr(calc(makeTestExpr())))
+end
+
+
+--TODO::
+--ADTs
+adt Enum
+	One
+	Two
+	Three
+end
+
+adt BinOperator
+	Plus
+	Minus
+	Divide
+	Multiply
+end
+
+adt SrcLoc
+	SrcLoc(line:i32, col:i32)
+end
+
+adt Expr
+	Const(x:i32)
+	BinOp(lhs:Expr, op:BinOperator, rhs:Expr)
+	
+	field loc:SrcLoc
+end
+
+function check_enum(e:Enum)
+	match e
+	case One 
+		Trace("Its one")
+	case Two 
+		Trace("Its two")
+	end
+end
+
+function makeTestExpr():Expr
+	return Expr.BinOp(Expr.Const(2), BinOperator.Multiply(), Expr.Const(2))
+end
+
+function calc(e:Expr):i32
+	match e 
+	case Const(x)
+		return x
+	case BinOp(lhs, op, rhs)
+		match op 
+		case Plus
+			return calc(lhs) + calc(rhs)
+		case Minus
+			return calc(lhs) - calc(rhs)
+		case Divide
+			return calc(lhs) / calc(rhs)
+		case Multiply
+			return calc(lhs) * calc(rhs)
+		end
+	end
+end
