@@ -310,7 +310,7 @@ package com.meduzik.jf.parser {
 				while ( true ){
 					if ( peek == TokenType.Else ){
 						take();
-						branch.else_ = parseStmt();
+						branch.else_ = parseBlock();
 						consume(TokenType.End);
 						break;
 					}else if ( peek == TokenType.ElIf ){

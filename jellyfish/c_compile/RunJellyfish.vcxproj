@@ -158,7 +158,10 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\out\program.c" />
+    <ClCompile Include="..\out\program.c">
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4715</DisableSpecificWarnings>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4715</DisableSpecificWarnings>
+    </ClCompile>
     <ClCompile Include="src\jellyfish.c" />
   </ItemGroup>
   <ItemGroup>
