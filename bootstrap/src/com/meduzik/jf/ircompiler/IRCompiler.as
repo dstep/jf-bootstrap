@@ -1,7 +1,9 @@
 package com.meduzik.jf.ircompiler {
 	import avmplus.getQualifiedClassName;
 	import com.meduzik.jf.ast.SrcLoc;
+	import com.meduzik.jf.ast.expr.AstNumberLit;
 	import com.meduzik.jf.ast.type.AstType;
+	import com.meduzik.jf.ast.type.AstTypeArray;
 	import com.meduzik.jf.ast.type.AstTypeRef;
 	import com.meduzik.jf.compiler.CompilationUnit;
 	import com.meduzik.jf.compiler.CompilerContext;
@@ -23,6 +25,7 @@ package com.meduzik.jf.ircompiler {
 	import com.meduzik.jf.ir.type.IRPrimType;
 	import com.meduzik.jf.ir.type.IRRefType;
 	import com.meduzik.jf.ir.type.IRType;
+	import com.meduzik.jf.ir.type.IRTypeArray;
 	/**
 	 * ...
 	 * @author 
@@ -137,6 +140,15 @@ package com.meduzik.jf.ircompiler {
 					return null;
 				}
 				return new IRRefType(reference);
+			}else if ( ast is AstTypeArray ){
+				var arr:AstTypeArray = ast as AstTypeArray;
+				var ir:IRTypeArray = new IRTypeArray(compileType(type, arr.elTy), arr.size);
+				
+				if ( arr.size is AstNumberLit ){
+					ir.fixedSize = parseInt(AstNumberLit(arr.size).content, 10);
+				}
+				
+				return ir;
 			}else{
 				Diagnostic.Report(source.getFileName(), ast.loc, "Can't resolve type", getQualifiedClassName(ast));
 				return null;

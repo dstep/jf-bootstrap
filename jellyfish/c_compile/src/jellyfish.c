@@ -4,20 +4,21 @@
 #include <stdio.h>
 
 jf_string jf_make_string(const char* lit){
-	jf_string s = malloc(sizeof(jf_string));
-	s->size = strlen(lit);
-	s->data = _strdup(lit);
-	return s;
+	return _strdup(lit);
 }
 
 jf_string jf_string_concat(jf_string left, jf_string right){
-	char* s = malloc(left->size + right->size);
-	memcpy(s, left->data, left->size);
-	memcpy(s + left->size, right->data, right->size);
-	jf_string str = malloc(sizeof(jf_string));
-	str->size = left->size + right->size;
-	str->data = s;
-	return str;
+	size_t leftSize = strlen(left);
+	size_t rightSize = strlen(right);
+
+	char* s = malloc(leftSize + rightSize);
+	memcpy(s, left, leftSize);
+	memcpy(s + leftSize, right, rightSize);
+	return s;
+}
+
+jf_i32 jf_compare_strings(jf_string left, jf_string right){
+	return strcmp(left, right);
 }
 
 jf_string IntToStr(jf_i32 x){
@@ -26,16 +27,16 @@ jf_string IntToStr(jf_i32 x){
 }
 
 jf_i32 StrToInt(jf_string s) {
-	return atoi(s->data);
+	return atoi(s);
 }
 
 void Trace(jf_string message){
-	printf("Trace: %.*s\n", (int)message->size, message->data);
+	printf("Trace: %s\n", message);
 }
 
 jf_string ReadLn(jf_string message) {
 	char s[80];
-	printf("%.*s", (int)message->size, message->data);
+	printf("%s", message);
 	fgets(s, 79, stdin);
 	return jf_make_string(s);
 }

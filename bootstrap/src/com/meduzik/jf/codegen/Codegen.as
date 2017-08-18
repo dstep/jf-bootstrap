@@ -3,6 +3,7 @@ package com.meduzik.jf.codegen {
 	import com.meduzik.jf.ast.Binder;
 	import com.meduzik.jf.ast.FunctionBodyBlock;
 	import com.meduzik.jf.ast.FunctionBodyFFI;
+	import com.meduzik.jf.ast.expr.AstArrayIndex;
 	import com.meduzik.jf.ast.expr.AstBinOp;
 	import com.meduzik.jf.ast.expr.AstCallExpr;
 	import com.meduzik.jf.ast.expr.AstExpr;
@@ -45,6 +46,7 @@ package com.meduzik.jf.codegen {
 	import com.meduzik.jf.ir.type.IRPrimType;
 	import com.meduzik.jf.ir.type.IRRefType;
 	import com.meduzik.jf.ir.type.IRType;
+	import com.meduzik.jf.ir.type.IRTypeArray;
 	import com.meduzik.jf.irbuilder.IRUnitBuilder;
 	import com.meduzik.jf.ircompiler.IRCompiler;
 	import com.meduzik.jf.parser.TokenType;
@@ -517,7 +519,12 @@ package com.meduzik.jf.codegen {
 					var sym:Symbol = IRMetatype(lhs.type).owner;
 					if ( sym is IRADT ){
 						adt = IRADT(sym);
-						var cons:IRADTConstructor = adt.findConstructor(id);						
+						var cons:IRADTConstructor = adt.findConstructor(id);
+						if ( cons.params.length == 0 ){
+							tmpName = genLocalName();
+							writer.writeln(getTypeName(adt.instanceType) + " " + tmpName + " = " + mangleADTConstructorName(cons) + "();");
+							return cexpr(adt.instanceType, tmpName);
+						}
 						if ( cons ){
 							return cexpr(cons.funType, mangleADTConstructorName(cons));
 						}
@@ -527,7 +534,16 @@ package com.meduzik.jf.codegen {
 				var newExpr:AstNew = expr as AstNew;
 				var type:IRTypeNode = resolveType(newExpr.type);
 				var typeName:String = getTypeName(type.resolution);
-				return cexpr(type.resolution, "jf_allocate(" + typeName + ")");
+				var localName:String = genLocalName();
+					
+				if ( type.resolution is IRTypeArray ){
+					arrTy = type.resolution as IRTypeArray;
+					var size:CExpr = codegenExpr(writer, arrTy.size);
+					writer.writeln(typeName + " " + localName + " = " + "jf_allocate_array(" + getTypeName(arrTy.type, true) + ", " + size.ref + ");");
+					return cexpr(type.resolution, localName);
+				}else{
+					throw new Error("NOPE");
+				}
 			}else if ( expr is AstStringLit ){
 				return cexpr(IRPrimType.Str, "jf_make_string(" + (expr as AstStringLit).content + ")");
 			}else if ( expr is AstNumberLit ){
@@ -562,29 +578,18 @@ package com.meduzik.jf.codegen {
 					codegen = "(" + lhs.toString() + ") / (" + rhs.toString() + ")";
 				}break;
 				
-				case TokenType.Eq:{
-					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") == (" + rhs.toString() + ")";
-				}break;
-				case TokenType.NEq:{
-					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") != (" + rhs.toString() + ")";
-				}break;
-				case TokenType.Lt:{
-					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") < (" + rhs.toString() + ")";
-				}break;
-				case TokenType.Gt:{
-					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") > (" + rhs.toString() + ")";
-				}break;
-				case TokenType.Le:{
-					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") <= (" + rhs.toString() + ")";
-				}break;
+				case TokenType.Eq:
+				case TokenType.NEq:
+				case TokenType.Lt:
+				case TokenType.Gt:
+				case TokenType.Le:
 				case TokenType.Ge:{
 					resultType = IRPrimType.Bool;
-					codegen = "(" + lhs.toString() + ") >= (" + rhs.toString() + ")";
+					if ( lhs.type == IRPrimType.I32 || lhs.type == IRPrimType.Pointer || lhs.type == IRPrimType.Bool ){
+						codegen = "(" + lhs.toString() + ") " + getComparisonOp(binop.op) + " (" + rhs.toString() + ")";
+					}else if ( lhs.type == IRPrimType.Str ){
+						codegen = "jf_compare_strings(" + lhs.toString() + ", " + rhs.toString() + ")" + getComparisonOp(binop.op) + " 0";
+					}
 				}break;
 				
 				case TokenType.And:{
@@ -599,6 +604,17 @@ package com.meduzik.jf.codegen {
 				writer.loc(binop.loc);
 				writer.writeln(getTypeName(resultType, true) + " " + tempName + " = " + codegen + ";");	
 				return cexpr(resultType, tempName);
+			}else if ( expr is AstArrayIndex ){
+				var index:AstArrayIndex = expr as AstArrayIndex;
+				lhs = codegenExpr(writer, index.lhs);
+				var idx:CExpr = codegenExpr(writer, index.index);
+				
+				if ( lhs.type is IRTypeArray ){
+					var arrTy:IRTypeArray = lhs.type as IRTypeArray;
+					return cexpr(arrTy.type, "(*(" + lhs.ref + " + " + idx.ref + "))");
+				}else{
+					throw new Error("can't index non-array");
+				}
 			}else if ( expr is AstExprId ){
 				var astId:AstExprId = expr as AstExprId;
 				switch ( astId.id ){
@@ -645,6 +661,18 @@ package com.meduzik.jf.codegen {
 			}
 			Diagnostic.Report(file.getFileName(), expr.loc, "Can't codegen", getQualifiedClassName(expr));
 			return cexpr(IRPrimType.Unit, "/*INVALID CODEGEN AT " + expr.loc + "*/");
+		}
+		
+		private function getComparisonOp(op:TokenType):String {
+			switch ( op ){
+			case TokenType.Eq: return "==";
+			case TokenType.NEq: return "!=";
+			case TokenType.Lt: return "<";
+			case TokenType.Le: return "<=";
+			case TokenType.Gt: return ">"; 
+			case TokenType.Ge: return ">=";
+			default: return "/*INVLAID OPERATOR*/";
+			}
 		}
 		
 		private function genLocalName():String {
@@ -703,6 +731,8 @@ package com.meduzik.jf.codegen {
 						throw new Error("Unimplemented prim type");
 					}break;
 					}
+				}else if ( type is IRTypeArray ){
+					return getTypeName(IRTypeArray(type).type, storage) + "*";
 				}else if ( type is IRRefType ){
 					var refType:IRRefType = type as IRRefType;
 					
@@ -711,19 +741,11 @@ package com.meduzik.jf.codegen {
 						if ( ref.symbol is IRStruct ){
 							var struct:IRStruct = ref.symbol as IRStruct;
 							forwardDeclare(struct);
-							if ( storage ){
-								return (mangleStructName(struct) + "_p");
-							}else{
-								return (mangleStructName(struct));
-							}
+							return (mangleStructName(struct) + "_p");
 						}else if ( ref.symbol is IRADT ){
 							var adt:IRADT = ref.symbol as IRADT;
 							forwardDeclareADT(adt);
-							if ( storage ){
-								return (mangleADTName(adt) + "_p");
-							}else{
-								return (mangleADTName(adt));
-							}
+							return (mangleADTName(adt) + "_p");
 						}else{
 							throw new Error("doesn't refer a type");
 						}

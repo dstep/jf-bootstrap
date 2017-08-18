@@ -27,6 +27,8 @@ package com.meduzik.jf.parser {
 		public static const Gt:TokenType = new TokenType("gt");
 		public static const Colon:TokenType = new TokenType("colon");
 		public static const Comma:TokenType = new TokenType("comma");
+		public static const LBracket:TokenType = new TokenType("[");
+		public static const RBracket:TokenType = new TokenType("]");
 		
 		public static const Import:TokenType = new TokenType("import");
 		public static const Function:TokenType = new TokenType("function");
@@ -67,7 +69,9 @@ package com.meduzik.jf.parser {
 			"<=" : Le,
 			">" : Gt,
 			">=" : Ge,
-			"," : Comma
+			"," : Comma,
+			"[" : LBracket,
+			"]" : RBracket
 		};
 		
 		public static const Keywords:Object = {

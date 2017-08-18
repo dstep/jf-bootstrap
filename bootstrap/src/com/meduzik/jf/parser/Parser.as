@@ -16,6 +16,7 @@ package com.meduzik.jf.parser {
 	import com.meduzik.jf.ast.StructDecl;
 	import com.meduzik.jf.ast.TopLevelDecl;
 	import com.meduzik.jf.ast.TypeDecl;
+	import com.meduzik.jf.ast.expr.AstArrayIndex;
 	import com.meduzik.jf.ast.expr.AstBinOp;
 	import com.meduzik.jf.ast.expr.AstCallExpr;
 	import com.meduzik.jf.ast.expr.AstExpr;
@@ -38,6 +39,7 @@ package com.meduzik.jf.parser {
 	import com.meduzik.jf.ast.stmt.AstStmtVar;
 	import com.meduzik.jf.ast.stmt.AstStmtWhile;
 	import com.meduzik.jf.ast.type.AstType;
+	import com.meduzik.jf.ast.type.AstTypeArray;
 	import com.meduzik.jf.ast.type.AstTypeRef;
 	import com.meduzik.jf.compiler.Diagnostic;
 	import flash.utils.ByteArray;
@@ -419,6 +421,14 @@ package com.meduzik.jf.parser {
 					expr = new AstExprDot(expr, name);
 					expr.loc = loc;
 				}break;
+				case TokenType.LBracket:{
+					take();
+					var indexExpr:AstArrayIndex = new AstArrayIndex();
+					indexExpr.lhs = expr;
+					indexExpr.index = parseExpr();
+					consume(TokenType.RBracket);
+					expr = indexExpr;
+				}break;
 				case TokenType.LParen:{
 					var callExpr:AstCallExpr = new AstCallExpr();
 					callExpr.head = expr;
@@ -539,9 +549,35 @@ package com.meduzik.jf.parser {
 				ty = new AstTypeRef(token.content);	
 				take();
 			}
+			if ( !ty ){
+				return null;
+			}
 			if ( ty ){
 				ty.loc = loc;
 			}
+			
+		rhs:
+			loc = location;
+			while ( true ){
+				if ( peek == TokenType.LBracket ){
+					take();
+					
+					var size:AstExpr;
+					if ( peek != TokenType.RBracket ){
+						size = parseExpr();
+					}
+					
+					consume(TokenType.RBracket);
+					
+					var arrayType:AstTypeArray = new AstTypeArray(ty, size);
+					arrayType.loc = loc;
+					
+					ty = arrayType;
+				}else{
+					break;
+				}
+			}
+			
 			return ty;
 		}
 		

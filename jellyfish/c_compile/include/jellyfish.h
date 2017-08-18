@@ -1,13 +1,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct {
-	size_t size;
-	char* data;
-} jf_string_t;
-
 typedef int32_t jf_i32;
-typedef jf_string_t* jf_string;
+typedef const char* jf_string;
 typedef void jf_unit;
 typedef int jf_bool;
 typedef void* jf_pointer;
@@ -18,7 +13,9 @@ typedef int jf_tag;
 
 jf_string jf_make_string(const char* lit);
 jf_string jf_string_concat(jf_string left, jf_string right);
+jf_i32 jf_compare_strings(jf_string left, jf_string right);
 
 void* _jf_allocate(size_t size);
 
 #define jf_allocate(T) ((T*)_jf_allocate(sizeof(T)))
+#define jf_allocate_array(T, size) ((T*)_jf_allocate(sizeof(T) * size))

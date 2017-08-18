@@ -3,4 +3,3 @@ function ReadLn(prompt:string):string import "ReadLn"
 
 function IntToStr(x:i32):string import "IntToStr"
 function StrToInt(s:string):i32 import "StrToInt"
-
