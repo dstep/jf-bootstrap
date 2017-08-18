@@ -6,6 +6,7 @@ package com.meduzik.jf.irbuilder {
 	import com.meduzik.jf.ast.Binder;
 	import com.meduzik.jf.ast.FieldGroup;
 	import com.meduzik.jf.ast.FunctionDecl;
+	import com.meduzik.jf.ast.GlobalVarDecl;
 	import com.meduzik.jf.ast.ImportDecl;
 	import com.meduzik.jf.ast.ParamGroup;
 	import com.meduzik.jf.ast.StructDecl;
@@ -20,6 +21,7 @@ package com.meduzik.jf.irbuilder {
 	import com.meduzik.jf.ir.IRADTConstructor;
 	import com.meduzik.jf.ir.IRADTField;
 	import com.meduzik.jf.ir.IRFunction;
+	import com.meduzik.jf.ir.IRGlobalVar;
 	import com.meduzik.jf.ir.IRImport;
 	import com.meduzik.jf.ir.IRParam;
 	import com.meduzik.jf.ir.IRStruct;
@@ -83,9 +85,22 @@ package com.meduzik.jf.irbuilder {
 				buildStruct(tld as StructDecl);
 			}else if ( tld is ADTDecl ){
 				buildADT(tld as ADTDecl);
+			}else if ( tld is GlobalVarDecl ){
+				buildGlobal(tld as GlobalVarDecl);
 			}else{
 				Diagnostic.Report(file.getFileName(), tld.loc, "Not implemented:", getQualifiedClassName(tld));
 			}
+		}
+		
+		private function buildGlobal(globalVarDecl:GlobalVarDecl):void {
+			var global:IRGlobalVar = new IRGlobalVar();
+			global.name = globalVarDecl.binder.name;
+			global.loc = globalVarDecl.binder.loc;
+			global.owner = unit;
+			global.type = buildTypeNode(globalVarDecl.type);
+			global.value = globalVarDecl.expr;
+			
+			unit.globals.add(global.name, global);
 		}
 		
 		private function buildADT(adtDecl:ADTDecl):void {

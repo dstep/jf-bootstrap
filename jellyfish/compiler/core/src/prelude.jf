@@ -1,5 +1,11 @@
-function Trace(message:string) import "Trace"
-function ReadLn(prompt:string):string import "ReadLn"
+function WriteLn(message:string) import "jfprelude_WriteLn"
 
-function IntToStr(x:i32):string import "IntToStr"
-function StrToInt(s:string):i32 import "StrToInt"
+function IntToStr(x:i32):string import "jfprelude_IntToStr"
+function CharCode(str:string):i32 import "jfprelude_CharCode"
+function ReadByte(ptr:pointer, offset:i32):i32 import "jfprelude_ReadByte"
+
+adt FileData
+	None
+	Data(ptr:pointer, size:i32)
+end
+function ReadFile(path:string):FileData import "jfprelude_ReadFile"

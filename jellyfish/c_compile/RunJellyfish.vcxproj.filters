@@ -24,6 +24,9 @@
     <ClCompile Include="..\out\program.c">
       <Filter>Source Files\gen</Filter>
     </ClCompile>
+    <ClCompile Include="src\prelude.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\jellyfish.h">

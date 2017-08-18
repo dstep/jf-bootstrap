@@ -9,6 +9,7 @@ package com.meduzik.jf.parser {
 	import com.meduzik.jf.ast.FunctionBodyFFI;
 	import com.meduzik.jf.ast.FunctionDecl;
 	import com.meduzik.jf.ast.FunctionSignature;
+	import com.meduzik.jf.ast.GlobalVarDecl;
 	import com.meduzik.jf.ast.ImportDecl;
 	import com.meduzik.jf.ast.ParamGroup;
 	import com.meduzik.jf.ast.QualID;
@@ -124,6 +125,10 @@ package com.meduzik.jf.parser {
 				take();
 				tld = parseFunction();	
 			}break; 
+			case TokenType.Global:{
+				take();
+				tld = parseGlobal();
+			}break;
 			case TokenType.ADT:{
 				take();
 				tld = parseADT();
@@ -145,6 +150,17 @@ package com.meduzik.jf.parser {
 			}else{
 				return false;
 			}
+		}
+		
+		private function parseGlobal():GlobalVarDecl {
+			var global:GlobalVarDecl = new GlobalVarDecl();
+			var loc:SrcLoc = location;
+			global.binder = new Binder(loc, consume(TokenType.Id).content);
+			consume(TokenType.Colon);
+			global.type = parseType();
+			consume(TokenType.Assign);
+			global.expr = parseExpr();
+			return global;
 		}
 		
 		private function parseTypeDecl():TypeDecl {

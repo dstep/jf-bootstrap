@@ -50,6 +50,7 @@ package com.meduzik.jf.parser {
 		public static const ADT:TokenType = new TokenType("adt");
 		public static const Match:TokenType = new TokenType("match");
 		public static const Case:TokenType = new TokenType("case");
+		public static const Global:TokenType = new TokenType("global");
 
 		public static const StringLit:TokenType = new TokenType("string");
 		
@@ -94,7 +95,8 @@ package com.meduzik.jf.parser {
 			"or" : Or,
 			"adt" : ADT,
 			"match" : Match,
-			"case" : Case
+			"case" : Case,
+			"global" : Global
 		};
 		
 		

@@ -34,6 +34,7 @@ package com.meduzik.jf.codegen {
 	import com.meduzik.jf.ir.IRADTConstructor;
 	import com.meduzik.jf.ir.IRADTField;
 	import com.meduzik.jf.ir.IRFunction;
+	import com.meduzik.jf.ir.IRGlobalVar;
 	import com.meduzik.jf.ir.IRParam;
 	import com.meduzik.jf.ir.IRStruct;
 	import com.meduzik.jf.ir.IRStructField;
@@ -76,16 +77,19 @@ package com.meduzik.jf.codegen {
 		
 		private var scope:Object = {};
 		
-		public function Codegen(ctx:CompilerContext, file:SourceFile) {
-			this.file = file;
+		public function Codegen(ctx:CompilerContext) {			
 			this.ctx = ctx;	
-			compiler = new IRCompiler(ctx, file);
-			builder = new IRUnitBuilder(ctx, file);
+			
+			
 		}
 		
 		private var nextTempName:int = 0;
 		
-		public function codegen(ir:IRUnit):String {			
+		public function codegen(file:SourceFile, ir:IRUnit):void {
+			this.file = file;
+			compiler = new IRCompiler(ctx, file);
+			builder = new IRUnitBuilder(ctx, file);
+			
 			for each ( var symbol:Symbol in ir.globals.list ){
 				if ( symbol is IRFunction ){
 					pieces[pieces.length] = codegenFunction(symbol as IRFunction);
@@ -93,12 +97,17 @@ package com.meduzik.jf.codegen {
 					codegenStruct(symbol as IRStruct);
 				}else if ( symbol is IRADT ){
 					codegenADT(symbol as IRADT);
+				}else if ( symbol is IRGlobalVar ){
+					codegenGlobal(symbol as IRGlobalVar);
 				}else{
 					Diagnostic.Report(file.getFileName(), symbol.loc, "Codegen not implemented", getQualifiedClassName(symbol));
 				}
 			}
-			
+		}
+		
+		public function finalize():String{
 			var all:FormattedWriter = new FormattedWriter();
+			all.writeln("#include <jellyfish.h>");
 			all.writeln(forw.getResult());
 			all.writeln(types.getResult());
 			all.writeln(decl.getResult());
@@ -114,6 +123,37 @@ package com.meduzik.jf.codegen {
 			forwardDeclareADT(adt);
 			defineADT(adt);
 			pieces[pieces.length] = codegenADTConstructors(adt);
+		}
+		
+		private function codegenGlobal(global:IRGlobalVar):void{
+			types.file(global.owner, global.loc);
+			var typeName:String = getTypeName(global.type.resolution);
+			types.writeln(typeName + " " + mangleGlobalName(global) + ";");
+			types.loc(global.loc);
+			types.writeln(typeName + " " + mangleGlobalName(global) + "_get();");
+			
+			pieces[pieces.length] = codegenGlobalFunc(global);
+		}
+		
+		private function codegenGlobalFunc(global:IRGlobalVar):String {
+			var writer:FormattedWriter = new FormattedWriter();
+	
+			writer.file(global.owner, global.loc);
+			writer.writeln(getTypeName(global.type.resolution) + " " + mangleGlobalName(global) + "_get(){");
+			writer.indent();
+			writer.writeln("static jf_bool init = jf_false;");
+			writer.writeln("if ( !init ){");
+			writer.indent();
+			writer.writeln("init = jf_true;");
+			var initExpr:CExpr = codegenExpr(writer, global.value);
+			writer.writeln(mangleGlobalName(global) + " = " + initExpr.ref + ";");
+			writer.unindent();
+			writer.writeln("}");
+			writer.writeln("return " + mangleGlobalName(global) + ";");
+			writer.unindent();			
+			writer.writeln("}");
+			
+			return writer.getResult();
 		}
 		
 		private function codegenStruct(struct:IRStruct):void {
@@ -435,7 +475,7 @@ package com.meduzik.jf.codegen {
 				}
 			}else if ( stmt is AstStmtAssign ){
 				var assign:AstStmtAssign = stmt as AstStmtAssign;
-				var lhs:String = codegenExpr(writer, assign.lhs).toString();
+				var lhs:String = codegenRef(writer, assign.lhs).toString();
 				var rhs:String = codegenExpr(writer, assign.rhs).toString();
 				writer.loc(assign.loc);
 				writer.writeln(lhs + " = " + rhs + ";");
@@ -467,7 +507,11 @@ package com.meduzik.jf.codegen {
 			return type;
 		}
 		
-		private function codegenExpr(writer:FormattedWriter, expr:AstExpr):CExpr {
+		private function codegenRef(writer:FormattedWriter, expr:AstExpr):CExpr{
+			return codegenExpr(writer, expr, true);
+		}
+		
+		private function codegenExpr(writer:FormattedWriter, expr:AstExpr, byRef:Boolean = false):CExpr {
 			if ( expr is AstCallExpr ){
 				var call:AstCallExpr = expr as AstCallExpr;
 				var head:CExpr = codegenExpr(writer, call.head);
@@ -653,6 +697,17 @@ package com.meduzik.jf.codegen {
 							forwardDeclareADT(adt);
 							return cexpr(adt.selfType, "/*ADT SHOULD NOT APPEAR IN THE CODE*/");
 						}
+						if ( symbol is IRGlobalVar ){
+							var global:IRGlobalVar = symbol as IRGlobalVar;
+							if ( byRef ){
+								writer.writeln(mangleGlobalName(global) + "_get();");								
+								return cexpr(global.type.resolution, mangleGlobalName(global));
+							}else{
+								tempName = genLocalName();
+								writer.writeln(getTypeName(global.type.resolution) + " " + tempName + " = " + mangleGlobalName(global) + "_get();");
+								return cexpr(global.type.resolution, tempName);
+							}
+						}
 					}
 					
 				}
@@ -776,6 +831,10 @@ package com.meduzik.jf.codegen {
 		
 		private function mangleADTConstructorName(cons:IRADTConstructor):String{
 			return mangleADTName(cons.owner) + "_" + cons.binder.name;
+		}
+		
+		private function mangleGlobalName(global:IRGlobalVar):String {
+			return ("global_" + mangleQualName(global.owner, global.name));
 		}
 		
 		private function mangleADTName(adt:IRADT):String {

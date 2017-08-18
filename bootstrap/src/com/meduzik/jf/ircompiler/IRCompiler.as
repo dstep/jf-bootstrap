@@ -13,6 +13,7 @@ package com.meduzik.jf.ircompiler {
 	import com.meduzik.jf.ir.IRADTConstructor;
 	import com.meduzik.jf.ir.IRADTField;
 	import com.meduzik.jf.ir.IRFunction;
+	import com.meduzik.jf.ir.IRGlobalVar;
 	import com.meduzik.jf.ir.IRImport;
 	import com.meduzik.jf.ir.IRParam;
 	import com.meduzik.jf.ir.IRStruct;
@@ -57,9 +58,15 @@ package com.meduzik.jf.ircompiler {
 				compileStruct(symbol as IRStruct);
 			}else if ( symbol is IRADT ){
 				compileADT(symbol as IRADT);
+			}else if ( symbol is IRGlobalVar ){
+				compileGlobalVar(symbol as IRGlobalVar);
 			}else{
 				Diagnostic.Report(source.getFileName(), symbol.loc, "Symbol not implemented", getQualifiedClassName(symbol));
 			}
+		}
+		
+		private function compileGlobalVar(global:IRGlobalVar):void {
+			compileTypeNode(global.type);
 		}
 		
 		private function compileADT(adt:IRADT):void {

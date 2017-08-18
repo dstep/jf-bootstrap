@@ -61,13 +61,10 @@ package com.meduzik.jf.compiler {
 			new IRCompiler(ctx, this).compile(ir);
 		}
 		
-		public function codegen(writer:FormattedWriter, ctx:CompilerContext):void {
+		public function codegen(codegen:Codegen, ctx:CompilerContext):void {
 			Diagnostic.Info("Codegen for source file", file.nativePath);
 			
-			var codegen:Codegen = new Codegen(ctx, this);
-			var code:String = codegen.codegen(ir);
-			writer.writeln("/*" + file.nativePath + "*/");
-			writer.writeln(code);
+			codegen.codegen(this, ir);
 		}
 		
 	}

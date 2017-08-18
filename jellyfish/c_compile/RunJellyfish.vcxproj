@@ -163,6 +163,7 @@
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4715</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="src\jellyfish.c" />
+    <ClCompile Include="src\prelude.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\jellyfish.h" />

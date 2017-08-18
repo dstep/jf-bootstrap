@@ -1,12 +1,17 @@
 import llvm.llvm
 import core.prelude
 
-adt Bool
-	True
-	False
-	FileNotFound
-end
+import main.lexer
 
 function run()
-	
+	var filename = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\src\\main.jf"
+	var lc = LexerCreate()
+	WriteLn("Reading " + filename)
+	match ReadFile(filename)
+	case None
+		WriteLn("Can't read file " + filename)
+	case Data(data, size)
+		WriteLn("Read " + IntToStr(size) + " bytes")		
+		LexerFeed(lc, data, size)
+	end
 end

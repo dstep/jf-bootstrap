@@ -1,4 +1,5 @@
 package com.meduzik.jf.compiler {
+	import com.meduzik.jf.codegen.Codegen;
 	import com.meduzik.jf.codegen.FormattedWriter;
 	import com.meduzik.jf.utils.ReadFileContents;
 	import com.meduzik.jf.utils.WriteFileContents;
@@ -81,13 +82,13 @@ package com.meduzik.jf.compiler {
 				}				
 			}
 			
-			writer.writeln("#include <jellyfish.h>");
+			var codegen:Codegen = new Codegen(this);
 			
 			for each ( source in sources ){			
-				source.codegen(writer, this);
+				source.codegen(codegen, this);
 			}
 			
-			WriteFileContents(outputRoot.resolvePath("program.c"), writer.getResult());
+			WriteFileContents(outputRoot.resolvePath("program.c"), codegen.finalize());
 		}
 		
 		public function getModule(modulePath:String):Module {

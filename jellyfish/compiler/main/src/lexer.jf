@@ -1,0 +1,139 @@
+import main.ast
+import core.prelude
+
+adt TokenType
+	Identifier
+end
+
+adt Token
+	New
+	
+	field tt:TokenType
+	field loc:SrcLoc
+	field content:string
+end
+
+adt TokenStream
+	New
+	
+	field array:Token[]
+	field capacity:i32
+	field size:i32
+end
+
+adt LexerContext
+	New
+	
+	field data:pointer
+	field size:i32
+	field current:i32
+	field tokenStart:i32
+	
+	field line:i32
+	field col:i32
+	field lastchar:i32
+	
+	field tokens:TokenStream
+end
+
+function TokenStreamCreate():TokenStream
+	var ts = TokenStream.New
+	ts.capacity = 0
+	ts.size = 0
+	return ts
+end
+
+function TokenStreamAdd(tokens:TokenStream, token:Token)
+	if tokens.size < tokens.capacity then
+		var newCapacity = tokens.capacity * 2 + 1
+		var newArray = new Token[newCapacity]
+		var i = 0
+		while i < tokens.size do
+			newArray[i] = tokens.array[i]
+			i = i + 1
+		end
+		tokens.array = newArray
+	end
+	
+	tokens.array[tokens.size] = token
+	tokens.size = tokens.size + 1
+end
+
+function peek(lex:LexerContext):i32
+	if lex.current >= lex.size then
+		return 0-1
+	else
+		return ReadByte(lex.data, lex.current)
+	end
+end
+
+function take(lex:LexerContext):i32
+	var ret = peek(lex)
+	if ret >= 0 then
+		lex.current = lex.current + 1
+		
+		if ret == 9 then
+			lex.col = lex.col + 4 --tab size
+			lex.lastchar = 0
+		elif ret == 10 then
+			if lex.lastchar == 13 then
+				lex.lastchar = 0
+			else
+				lex.lastchar = 10
+				lex.col = 0
+				lex.line = lex.line + 1
+			end
+		elif ret == 13 then
+			if lex.lastchar == 10 then
+				lex.lastchar = 0
+			else
+				lex.lastchar = 13
+				lex.col = 0
+				lex.line = lex.line + 1
+			end
+		else
+			lex.col = lex.col + 1
+			lex.lastchar = 0
+		end
+	end
+	return ret
+end
+
+function LexerCreate():LexerContext
+	var lex = LexerContext.New
+	lex.tokens = TokenStreamCreate()
+	lex.lastchar = 0
+	lex.line = 0
+	lex.col = 0
+	return lex
+end
+
+function LexerFeed(lex:LexerContext, data:pointer, size:i32)
+	lex.data = data
+	lex.size = size
+	lex.current = 0
+end
+
+global CharMinus:i32 = CharCode("-")
+global CharTab:i32 = CharCode("\t")
+global CharSpace:i32 = CharCode(" ")
+global CharNewLine:i32 = CharCode("\n")
+global CharCR:i32 = CharCode("\r")
+
+function LexerRun(lex:LexerContext):TokenStream
+	while true do
+		var ch = peek(lex)
+		if ch < 0 then
+			return lex.tokens
+		end
+		
+		lex.tokenStart = lex.current
+		
+		--newlines, tabs and spaces
+		if ch == CharNewLine or ch == CharCR or ch == CharSpace or ch == CharTab then
+			take(lex)
+		elif ch == CharMinus then --minus
+			
+		end
+	end
+end
