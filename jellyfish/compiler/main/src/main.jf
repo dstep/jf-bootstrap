@@ -2,16 +2,24 @@ import llvm.llvm
 import core.prelude
 
 import main.lexer
+import main.parser
 
 function run()
-	var filename = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\src\\main.jf"
-	var lc = LexerCreate()
+	var filename = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\src\\lexer.jf"
+	
 	WriteLn("Reading " + filename)
 	match ReadFile(filename)
 	case None
 		WriteLn("Can't read file " + filename)
 	case Data(data, size)
 		WriteLn("Read " + IntToStr(size) + " bytes")		
-		LexerFeed(lc, data, size)
+		var lc = LexerCreate()
+		LexerFeed(lc, filename, data, size)
+		var tokens = LexerRun(lc)
+		WriteLn("Lexing done, running parser...")		
+		var parser = ParserCreate()
+		ParserFeed(parser, filename, tokens)
+		var ast = ParserRun(parser)
+		WriteLn("Parsing done")	
 	end
 end

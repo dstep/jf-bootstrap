@@ -1,3 +1,9 @@
 adt SrcLoc
 	At(line:i32, col:i32)
 end
+
+adt AstFile
+	New
+	
+	
+end

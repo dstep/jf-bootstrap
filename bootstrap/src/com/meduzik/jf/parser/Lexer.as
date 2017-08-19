@@ -94,11 +94,10 @@ package com.meduzik.jf.parser {
 					error("unexpected eof inside string");
 				}
 				
-				take();
 				if ( peek == Backslash ){
 					take();
-					take();
 				}
+				take();
 			}
 			take();
 			token(TokenType.StringLit);

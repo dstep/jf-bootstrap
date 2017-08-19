@@ -564,6 +564,9 @@ package com.meduzik.jf.codegen {
 					if ( sym is IRADT ){
 						adt = IRADT(sym);
 						var cons:IRADTConstructor = adt.findConstructor(id);
+						if ( !cons ){
+							throw new Error(adt.name + " doesn't have " + id + " constructor");
+						}
 						if ( cons.params.length == 0 ){
 							tmpName = genLocalName();
 							writer.writeln(getTypeName(adt.instanceType) + " " + tmpName + " = " + mangleADTConstructorName(cons) + "();");

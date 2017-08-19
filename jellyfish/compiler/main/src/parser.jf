@@ -1,0 +1,41 @@
+import main.ast
+import main.token
+
+adt ParserContext
+	New
+	
+	field filename:string
+	
+	field tokens:TokenStream
+	field curToken:i32
+end
+
+function peek(par:ParserContext):TokenType
+	return par.tokens.array[par.curToken].tt
+end
+
+function take(par:ParserContext):Token
+	var tok = par.tokens.array[par.curToken]
+	if par.curToken < par.tokens.size - 1 then
+		par.curToken = par.curToken + 1
+	end
+	return tok
+end
+
+function ParserCreate():ParserContext
+	var par = ParserContext.New
+
+	return par
+end
+
+function ParserFeed(par:ParserContext, filename:string, tokens:TokenStream)
+	par.filename = filename
+	par.tokens = tokens
+	par.curToken = 0
+end
+
+function ParserRun(par:ParserContext):AstFile
+	var file:AstFile = AstFile.New
+	
+	return file
+end

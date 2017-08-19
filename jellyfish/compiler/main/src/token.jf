@@ -1,0 +1,127 @@
+import main.ast
+
+adt TokenType
+	Identifier
+	
+	StringLiteral
+	NumberLiteral
+	
+	Dot	
+	LParen
+	RParen
+	Colon
+	Comma
+	LBracket
+	RBracket
+	
+	Assign
+	
+	CmpEQ
+	CmpNE
+	CmpLT
+	CmpGT
+	CmpLE
+	CmpGE
+	
+	Minus
+	Plus
+	Divide
+	Multiply
+	
+	KImport
+	KFunction
+	KEnd
+	KVar
+	KType
+	KStruct
+	KField
+	KNew
+	KReturn
+	KIf
+	KThen
+	KElse
+	KElIf
+	KWhile
+	KDo
+	KAnd
+	KOr
+	KADT
+	KMatch
+	KCase
+	KGlobal
+	
+	EOF
+end
+
+
+function TokenGetName(token:Token):string
+	match token.tt
+	case Identifier return "id:" + token.content
+	
+	case Dot return "."
+	case LParen return "("
+	case RParen return ")"
+	case Colon return ":"
+	case Comma return ","
+	case LBracket return "["
+	case RBracket return "]"
+	
+	case KImport return "KImport"
+	case KFunction return "KFunction"
+	case KEnd return "KEnd"
+	case KVar return "KVar"
+	case KType return "KType"
+	case KStruct return "KStruct"
+	case KField return "KField"
+	case KNew return "KNew"
+	case KReturn return "KReturn"
+	case KIf return "KIf"
+	case KThen return "KThen"
+	case KElse return "KElse"
+	case KElIf return "KElIf"
+	case KWhile return "KWhile"
+	case KDo return "KDo"
+	case KAnd return "KAnd"
+	case KOr return "KOr"
+	case KADT return "KADT"
+	case KMatch return "KMatch"
+	case KCase return "KCase"
+	case KGlobal return "KGlobal"
+	
+	case StringLiteral return "string_lit:" + token.content
+	case NumberLiteral return "number_lit:" + token.content
+	
+	case Minus return "-"
+	case Plus return "+"
+	case Multiply return "*"
+	case Divide return "/"
+	
+	case CmpEQ return "=="
+	case CmpNE return "<>"
+	case CmpGT return ">"
+	case CmpLT return "<"
+	case CmpGE return ">="
+	case CmpLE return "<="
+	
+	case Assign return "="
+	
+	case EOF return "eof"
+	end
+end
+
+adt Token
+	New
+	
+	field tt:TokenType
+	field loc:SrcLoc
+	field content:string
+end
+
+adt TokenStream
+	New
+	
+	field array:Token[]
+	field capacity:i32
+	field size:i32
+end
+

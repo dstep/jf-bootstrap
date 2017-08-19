@@ -1,9 +1,17 @@
 #include <jellyfish.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-jf_i32 jfprelude_ReadByte(jf_pointer ptr, jf_i32 offset){
+jf_i32 jfprelude_LoadByte(jf_pointer ptr, jf_i32 offset){
 	return ((unsigned char*)ptr)[offset];
+}
+
+jf_string jfprelude_LoadString(jf_pointer ptr, jf_i32 offset, jf_i32 size) {
+	char* s = malloc(size + 1);
+	memcpy(s, ((const char*)ptr) + offset, size);
+	s[size] = 0;
+	return jf_make_string(s);
 }
 
 typedef struct {
@@ -33,8 +41,8 @@ jf_FileData* jfprelude_ReadFile(jf_string path){
 	return data;
 }
 
-void jfprelude_WriteLn(jf_string message) {
-	printf("Trace: %s\n", message);
+void jfprelude_Write(jf_string message) {
+	printf("%s", message);
 }
 
 jf_string jfprelude_ReadLn(jf_string message) {
@@ -54,6 +62,15 @@ jf_i32 jfprelude_StrToInt(jf_string s) {
 	return atoi(s);
 }
 
-jf_i32 jfprelude_CharCode(jf_string s){
-	return s[0];
+jf_i32 jfprelude_CharAt(jf_string s, jf_i32 i) {
+	return s[i];
+}
+
+jf_i32 jfprelude_StringLength(jf_string s) {
+	return (jf_i32)strlen(s);
+}
+
+void jfprelude_Exit(jf_i32 code){
+	system("pause");
+	exit(code);
 }
