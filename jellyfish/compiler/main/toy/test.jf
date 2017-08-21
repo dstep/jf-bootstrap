@@ -1,0 +1,13 @@
+import main.other
+
+adt Foo
+	Y
+	X(x:Bar)
+	Z(f:string)
+	
+	field x:i32
+end
+
+adt Bar
+
+end

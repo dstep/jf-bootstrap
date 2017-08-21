@@ -1,20 +1,7 @@
 {
 	"assemblies" : {
 		"main" : {
-			"module" : "./main",
-			"dependencies" : {
-				"core" : {"assembly":"core"},
-				"llvm" : {"assembly":"core"}
-			}
-		},
-		"llvm" : {
-			"module" : "./llvm",
-			"dependencies" : {
-				"core" : {"assembly":"core"}
-			}
-		},
-		"core" : {
-			"module" : "./core"
+			"module" : "./main"
 		}
 	}
 }

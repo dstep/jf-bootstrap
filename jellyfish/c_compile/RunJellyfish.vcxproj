@@ -166,6 +166,7 @@
     <ClCompile Include="src\prelude.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\dirent.h" />
     <ClInclude Include="include\jellyfish.h" />
   </ItemGroup>
   <ItemGroup>
@@ -176,7 +177,20 @@
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\out\program.c</Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">..\out\program.c</Outputs>
     </None>
+    <None Include="..\compiler\main\src\ast.jf" />
+    <None Include="..\compiler\main\src\ast_expr.jf" />
+    <None Include="..\compiler\main\src\ast_stmt.jf" />
+    <None Include="..\compiler\main\src\ast_type.jf" />
+    <None Include="..\compiler\main\src\compiler.jf" />
+    <None Include="..\compiler\main\src\ir.jf" />
+    <None Include="..\compiler\main\src\ir_builder.jf" />
+    <None Include="..\compiler\main\src\ir_compiler.jf" />
+    <None Include="..\compiler\main\src\lexer.jf" />
+    <None Include="..\compiler\main\src\llvm.jf" />
     <None Include="..\compiler\main\src\main.jf" />
+    <None Include="..\compiler\main\src\parser.jf" />
+    <None Include="..\compiler\main\src\prelude.jf" />
+    <None Include="..\compiler\main\src\token.jf" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,0 +1,74 @@
+function WriteLn(message:string) 
+	Write(message)
+	Write("\n")
+end
+
+function Write(message:string) import "jfprelude_Write"
+
+function IntToStr(x:i32):string import "jfprelude_IntToStr"
+function CharCode(str:string):i32
+	return CharAt(str, 0)
+end
+function CharAt(str:string, i:i32):i32 import "jfprelude_CharAt"
+function StringLength(str:string):i32 import "jfprelude_StringLength"
+function Substring(str:string, from:i32, length:i32):string import "jfprelude_Substring"
+
+function LoadByte(ptr:pointer, offset:i32):i32 import "jfprelude_LoadByte"
+function LoadString(ptr:pointer, offset:i32, size:i32):string import "jfprelude_LoadString"
+
+function Exit(code:i32):string import "jfprelude_Exit"
+
+adt FileData
+	None
+	Data(ptr:pointer, size:i32)
+end
+function ReadFile(path:string):FileData import "jfprelude_ReadFile"
+
+
+adt DirectoryData
+	field files:string[]	
+	field count:i32	
+end
+function ReadDirectory(path:string):DirectoryData import "jfprelude_ReadDirectory"
+
+function EndsWith(str:string, endsWith:string):bool
+	var len1 = StringLength(str)
+	var len2 = StringLength(endsWith)
+	if len1 < len2 then
+		return false
+	else
+		return Substring(str, len1 - len2, len2) == endsWith
+	end
+end
+
+function Max(a:i32, b:i32):i32
+	if a > b then
+		return a
+	else
+		return b
+	end
+end
+
+function IndexOf(str:string, ch:i32):i32
+	var i = 0
+	var n = StringLength(str)
+	while i < n do
+		if CharAt(str, i) == ch then
+			return i
+		end
+		i = i + 1
+	end
+	return 0-1
+end
+
+function LastIndexOf(str:string, ch:i32):i32	
+	var n = StringLength(str)
+	var i = n
+	while i > 0 do
+		i = i - 1
+		if CharAt(str, i) == ch then
+			return i
+		end		
+	end
+	return 0-1
+end

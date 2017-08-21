@@ -1,0 +1,240 @@
+import main.ast
+import main.ast_expr
+import main.ast_type
+import main.ast_stmt
+import main.prelude
+
+adt IRImport
+	New
+	
+	field loc:SrcLoc
+	field qid:QualID
+	field name:string
+	
+	field resolution:IRCompilationUnit
+end
+
+adt IRImportList
+	Nil
+	Cons(import_:IRImport, tail:IRImportList)
+end
+
+adt IRSymbol
+	Function(decl:IRFunctionDecl)
+	Global(decl:IRGlobalDecl)
+	ADT(decl:IRADTDecl)
+	
+	field owner:IRSourceFile
+	field loc:SrcLoc
+	field name:string
+end
+
+adt MaybeIRSymbol
+	Nothing
+	Just(symbol:IRSymbol)
+end
+
+adt IRFunctionDecl
+	New
+	
+	field symbol:IRSymbol
+	field params:IRParamList
+	field retTy:IRTypeNode
+	
+	field body:IRFunctionBody
+end
+
+adt IRFunctionBody
+	FFIImport(text:string)
+	Block(block:IRBlockNode)
+	
+	field loc:SrcLoc
+end
+
+adt IRBlockNode
+	New
+	
+	field ast:AstStmtList
+end
+	
+adt IRADTDecl
+	New
+	
+	field cons:IRADTConsList
+	field fields:IRADTFieldList
+	field symbol:IRSymbol
+	field selfType:IRType
+	field metaType:IRType
+end
+
+adt IRADTField
+	New
+	
+	field owner:IRADTDecl
+	field name:string
+	field loc:SrcLoc
+	field type:IRTypeNode
+end
+
+adt IRADTFieldList
+	Nil
+	Cons(field_:IRADTField, tail:IRADTFieldList)
+end
+
+adt IRADTCons
+	New
+	
+	field owner:IRADTDecl
+	field index:i32
+	field name:string
+	field loc:SrcLoc
+	field params:IRParamList
+end
+
+adt IRADTConsList
+	Nil
+	Cons(cons:IRADTCons, tail:IRADTConsList)
+end
+
+adt IRParam
+	New
+	
+	field name:string
+	field loc:SrcLoc
+	field type:IRTypeNode
+end
+
+adt IRParamList
+	Nil
+	Cons(param:IRParam, tail:IRParamList)
+end
+
+adt IRGlobalDecl
+	New
+	
+	field symbol:IRSymbol
+	field type:IRTypeNode
+	field expr:IRExprNode
+end
+
+adt IRTypeNode
+	New
+	
+	field resolved:bool
+	field loc:SrcLoc
+	field type:IRType
+end
+
+adt IRExprNode
+	New
+	
+	field loc:SrcLoc
+	field ast:AstExpr
+	
+end
+
+adt IRPrimType
+	Unit
+	I32
+	String
+	Pointer
+	Bool
+	
+end
+
+adt IRTypeReference
+	New
+	
+	field id:string
+	field loc:SrcLoc
+	field owner:IRSourceFile
+	field resolution:IRType
+end
+
+adt IRType
+	Ref(ref:IRTypeReference)
+	Prim(type:IRPrimType)
+	ADT(decl:IRADTDecl)
+	ADTMetaclass(decl:IRADTDecl)
+	ArrayUnsized(elementType:IRType)
+	ArraySized(elementType:IRType, size:IRExprNode)
+end
+
+adt IRSymbolList
+	Nil
+	Cons(symbol:IRSymbol, tail:IRSymbolList)
+end
+
+adt SourceFileRef
+	New
+	
+	field dir:string
+	field basename:string
+	field suffix:string
+	field path:string
+end
+
+adt IRSourceFile
+	New
+	
+	field file:SourceFileRef
+	
+	field unit_:IRCompilationUnit
+	
+	field imports:IRImportList
+	field symbols:IRSymbolList
+end
+
+adt IRSourceFileList
+	Nil
+	Cons(file:IRSourceFile, tail:IRSourceFileList)
+end
+
+adt IRCompilationUnit
+	New
+	
+	field name:string
+	field files:IRSourceFileList
+end
+
+adt IRCompilationUnitList
+	Nil
+	Cons(unit_:IRCompilationUnit, tail:IRCompilationUnitList)
+end
+
+function IRCompilationUnitCreate(name:string):IRCompilationUnit
+	var unit_ = IRCompilationUnit.New
+	unit_.name = name
+	unit_.files = IRSourceFileList.Nil
+	return unit_
+end
+
+function IRSourceFileCreate(unit_:IRCompilationUnit, ref:SourceFileRef):IRSourceFile
+	var file = IRSourceFile.New
+	file.file = ref	
+	file.unit_ = unit_
+	file.imports = IRImportList.Nil
+	file.symbols = IRSymbolList.Nil
+	
+	IRUnitInsertFile(unit_, file)
+	
+	return file
+end
+
+
+function IRUnitInsertFile(unit_:IRCompilationUnit, file:IRSourceFile)
+	var files = unit_.files
+	while true do
+		match files
+		case Nil
+			unit_.files = IRSourceFileList.Cons(file, unit_.files)
+			return
+		case Cons(file_, tail)
+			files = tail
+			if file_.file.suffix == file.file.suffix then
+				WriteLn("Duplicate source file for unit " + unit_.name + " with suffix " + file.file.suffix)
+				Exit(1)
+			end
+		end
+	end
+end

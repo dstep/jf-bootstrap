@@ -3,6 +3,7 @@ package com.meduzik.jf.codegen {
 	import com.meduzik.jf.ast.Binder;
 	import com.meduzik.jf.ast.FunctionBodyBlock;
 	import com.meduzik.jf.ast.FunctionBodyFFI;
+	import com.meduzik.jf.ast.SrcLoc;
 	import com.meduzik.jf.ast.expr.AstArrayIndex;
 	import com.meduzik.jf.ast.expr.AstBinOp;
 	import com.meduzik.jf.ast.expr.AstCallExpr;
@@ -403,7 +404,7 @@ package com.meduzik.jf.codegen {
 				}
 				
 				if ( !adt ){
-					throw new Error("can't match non-adt");
+					error(stmt.loc, "can't match non-adt type");
 				}
 				 
 				writer.writeln("switch ( " + tmpName + "->tag ){");
@@ -413,7 +414,7 @@ package com.meduzik.jf.codegen {
 					if ( matchCase.pattern is AstPatternCons ){
 						cons = adt.findConstructor(AstPatternCons(matchCase.pattern).id);
 						if ( !cons ){
-							throw new Error("no such constructor");
+							error(matchCase.pattern.loc, "no such constructor: " + AstPatternCons(matchCase.pattern).id);
 						}
 					}else if ( matchCase.pattern is AstPatternId ){
 						cons = adt.findConstructor(AstPatternId(matchCase.pattern).binder.name);
@@ -511,6 +512,11 @@ package com.meduzik.jf.codegen {
 			return codegenExpr(writer, expr, true);
 		}
 		
+		private function error(loc:SrcLoc, message:String):void{
+			Diagnostic.Report(file.getFileName(), loc, message);
+			throw new CodegenError();
+		}
+		
 		private function codegenExpr(writer:FormattedWriter, expr:AstExpr, byRef:Boolean = false):CExpr {
 			if ( expr is AstCallExpr ){
 				var call:AstCallExpr = expr as AstCallExpr;
@@ -523,7 +529,7 @@ package com.meduzik.jf.codegen {
 				writer.loc(expr.loc);
 				var funTy:IRFunType = head.type as IRFunType;
 				if ( !funTy ){
-					throw new Error("that doesn't sound fun");
+					error(expr.loc, "that doesn't sound fun");
 				}
 				if ( funTy.returnType != IRPrimType.Unit ){
 					writer.write(getTypeName(funTy.returnType, true) + " " + tmpName + " = ");
@@ -565,7 +571,7 @@ package com.meduzik.jf.codegen {
 						adt = IRADT(sym);
 						var cons:IRADTConstructor = adt.findConstructor(id);
 						if ( !cons ){
-							throw new Error(adt.name + " doesn't have " + id + " constructor");
+							error(expr.loc, adt.name + " doesn't have " + id + " constructor");
 						}
 						if ( cons.params.length == 0 ){
 							tmpName = genLocalName();

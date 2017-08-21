@@ -1,0 +1,34 @@
+import main.ir
+import main.prelude
+
+adt CompilerContext
+	New
+	
+	field units:IRCompilationUnitList
+end
+
+function CompilerContextCreate():CompilerContext
+	var cc = CompilerContext.New
+	
+	cc.units = IRCompilationUnitList.Nil
+	
+	return cc
+end
+
+function CompilerGetCompilationUnit(compiler:CompilerContext, name:string):IRCompilationUnit
+	var units = compiler.units
+	while true do
+		match units
+		case Nil 
+			var unit_ = IRCompilationUnitCreate(name)
+			compiler.units = IRCompilationUnitList.Cons(unit_, compiler.units)
+			WriteLn("Added compilation unit " + name)
+			return unit_
+		case Cons(unit_, tail)
+			if unit_.name == name then			
+				return unit_
+			end
+			units = tail
+		end
+	end
+end

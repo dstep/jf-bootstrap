@@ -6,14 +6,5 @@
 		{
 			"path" : "src"
 		}
-	],
-	
-	"dependencies" : {
-		"jf.core" : {
-			"module" : "core-0.0.1"
-		},
-		"llvm" : {
-			"module" : "llvm-0.0.1"
-		}
-	}
+	]
 }

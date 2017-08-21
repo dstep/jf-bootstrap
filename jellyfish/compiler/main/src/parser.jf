@@ -1,5 +1,9 @@
 import main.ast
+import main.ast_stmt
+import main.ast_expr
+import main.ast_type
 import main.token
+import main.prelude
 
 adt ParserContext
 	New
@@ -10,16 +14,28 @@ adt ParserContext
 	field curToken:i32
 end
 
+function getNextToken(par:ParserContext):Token
+	return par.tokens.array[par.curToken]
+end
+
 function peek(par:ParserContext):TokenType
-	return par.tokens.array[par.curToken].tt
+	return getNextToken(par).tt
 end
 
 function take(par:ParserContext):Token
-	var tok = par.tokens.array[par.curToken]
+	var tok = getNextToken(par)
 	if par.curToken < par.tokens.size - 1 then
 		par.curToken = par.curToken + 1
 	end
 	return tok
+end
+
+function consume(par:ParserContext, tt:TokenType):Token
+	if isNextToken(par, tt) then
+		return take(par)
+	else
+		ParserError(par, "expected " + TokenTypeGetName(tt))
+	end
 end
 
 function ParserCreate():ParserContext
@@ -34,8 +50,549 @@ function ParserFeed(par:ParserContext, filename:string, tokens:TokenStream)
 	par.curToken = 0
 end
 
+function ParserError(par:ParserContext, message:string)
+	var loc = getLocation(par)
+	match loc
+	case At(line, col)
+		WriteLn(par.filename + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): Parser Error: " + message)
+	end
+	Exit(1)
+end
+
 function ParserRun(par:ParserContext):AstFile
 	var file:AstFile = AstFile.New
 	
+	ParserParseFile(par, file)
+	
+	if isNextToken(par, TokenType.EOF) == false then
+		ParserError(par, "expected eof")
+	end
+	
 	return file
 end
+
+function isNextToken(par:ParserContext, tt:TokenType):bool
+	return TokenTypeToNum(peek(par)) == TokenTypeToNum(tt)
+end
+
+function getLocation(par:ParserContext):SrcLoc
+	return getNextToken(par).loc
+end
+
+function parseQualID(par:ParserContext):QualID
+	var tok = consume(par, TokenType.Identifier)
+	return QualID.Piece(tok.content, parseQualIDRhs(par))
+end
+
+function parseQualIDRhs(par:ParserContext):QualID
+	if isNextToken(par, TokenType.Dot) then
+		take(par)
+		return parseQualID(par)
+	else
+		return QualID.End
+	end
+end
+
+function parseImports(par:ParserContext):AstImportList
+	if isNextToken(par, TokenType.KImport) then
+		var loc = getLocation(par)
+		take(par)
+		
+		var astImport = AstImport.New
+		astImport.loc = loc
+		astImport.qid = parseQualID(par)
+		return AstImportList.Cons(astImport, parseImports(par))
+	else
+		return AstImportList.Nil
+	end
+end
+
+function parseBinder(par:ParserContext):Binder
+	var tok = consume(par, TokenType.Identifier)
+	return Binder.NameAt(tok.content, tok.loc)
+end
+
+function parseField(par:ParserContext):AstField
+	var field_ = AstField.New
+	consume(par, TokenType.KField)
+	field_.name = parseBinder(par)
+	consume(par, TokenType.Colon)
+	field_.type = parseType(par)
+	return field_
+end
+
+function parseADTFieldsList(par:ParserContext):AstADTFieldsList
+	if isNextToken(par, TokenType.KField) then
+		var field_ = parseField(par)
+		return AstADTFieldsList.Cons(field_, parseADTFieldsList(par))
+	else
+		return AstADTFieldsList.Nil
+	end
+end
+
+function parseADT(par:ParserContext):AstTopLevel
+	var loc = getLocation(par)
+	take(par)
+	
+	var name = parseBinder(par)
+	var cons = parseADTConsList(par)
+	var fields = parseADTFieldsList(par)
+	
+	consume(par, TokenType.KEnd)
+	
+	var adtDecl = AstTopLevel.ADT(name, cons, fields)
+	adtDecl.loc = loc
+	return adtDecl	
+end
+
+function parseExpr(par:ParserContext, prec:i32):AstExpr
+	match maybeParseExpr(par, prec)
+	case Just(expr)
+		return expr
+	case Nothing
+		ParserError(par, "expected expression")
+	end
+end
+
+function maybeParseExpr(par:ParserContext, prec:i32):MaybeAstExpr	
+	match maybeParsePrimExpr(par)
+	case Just(expr)
+		var ast = expr
+		while true do
+			var loc = getLocation(par)
+			if isNextToken(par, TokenType.Dot) then
+				take(par)
+				ast = AstExpr.Dot(ast, consume(par, TokenType.Identifier).content)
+			elif isNextToken(par, TokenType.LParen) then
+				take(par)
+				var args = parseExprListCommaSeparated(par)
+				consume(par, TokenType.RParen)
+				ast = AstExpr.Call(ast, args)
+			elif isNextToken(par, TokenType.LBracket) then
+				take(par)
+				var rhs = parseExpr(par, 0)
+				consume(par, TokenType.RBracket)
+				ast = AstExpr.Index(ast, rhs)
+				
+			elif isNextToken(par, TokenType.KOr) and prec <= 3 then
+				ast = parseBinOp(par, ast, BinOp.Or, 4)
+				
+			elif isNextToken(par, TokenType.KAnd) and prec <= 4 then
+				ast = parseBinOp(par, ast, BinOp.And, 5)
+			
+			elif isNextToken(par, TokenType.CmpEQ) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpEQ, 6)
+			elif isNextToken(par, TokenType.CmpNE) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpNE, 6)
+			elif isNextToken(par, TokenType.CmpGT) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpGT, 6)
+			elif isNextToken(par, TokenType.CmpGE) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpGE, 6)
+			elif isNextToken(par, TokenType.CmpLT) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpLT, 6)
+			elif isNextToken(par, TokenType.CmpLE) and prec <= 5 then
+				ast = parseBinOp(par, ast, BinOp.CmpLE, 6)
+			
+			elif isNextToken(par, TokenType.Plus) and prec <= 10 then
+				ast = parseBinOp(par, ast, BinOp.Plus, 11)
+			elif isNextToken(par, TokenType.Minus) and prec <= 10 then
+				ast = parseBinOp(par, ast, BinOp.Minus, 11)
+				
+			elif isNextToken(par, TokenType.Divide) and prec <= 11 then
+				ast = parseBinOp(par, ast, BinOp.Divide, 12)
+			elif isNextToken(par, TokenType.Multiply) and prec <= 11 then
+				ast = parseBinOp(par, ast, BinOp.Multiply, 12)
+				
+			else
+				return MaybeAstExpr.Just(ast)
+			end
+			ast.loc = loc
+		end
+	case nothing
+		return nothing
+	end
+end
+
+function parseBinOp(par:ParserContext, lhs:AstExpr, op:BinOp, prec:i32):AstExpr
+	take(par)
+
+	var rhs = parseExpr(par, prec)
+	return AstExpr.BinOp(lhs, op, rhs)
+end
+
+function maybeParsePrimExpr(par:ParserContext):MaybeAstExpr
+	var loc = getLocation(par)
+	var ast:AstExpr
+	if isNextToken(par, TokenType.Identifier) then
+		ast = AstExpr.Id(take(par).content)
+	elif isNextToken(par, TokenType.KNew) then
+		take(par)
+		var type = parseType(par)
+		ast = AstExpr.New(type)
+	elif isNextToken(par, TokenType.StringLiteral) then
+		ast = AstExpr.StringLit(take(par).content)
+	elif isNextToken(par, TokenType.NumberLiteral) then
+		ast = AstExpr.NumberLit(take(par).content)
+	elif isNextToken(par, TokenType.LParen) then
+		take(par)
+		ast = parseExpr(par, 0)
+		consume(par, TokenType.RParen)
+	else
+		return MaybeAstExpr.Nothing
+	end
+	ast.loc = loc
+	return MaybeAstExpr.Just(ast)
+end
+
+function parseExprListCommaSeparatedTail(par:ParserContext):AstExprList
+	if isNextToken(par, TokenType.Comma) then
+		take(par)
+		var expr = parseExpr(par, 0)
+		return AstExprList.Cons(expr, parseExprListCommaSeparatedTail(par))
+	else
+		return AstExprList.Nil
+	end
+end
+
+function parseExprListCommaSeparated(par:ParserContext):AstExprList
+	match maybeParseExpr(par, 0)
+	case Just(expr)
+		return AstExprList.Cons(expr, parseExprListCommaSeparatedTail(par))
+	case Nothing
+		return AstExprList.Nil
+	end
+end
+
+function parseIf(par:ParserContext):AstStmt
+	var cond = parseExpr(par, 0)
+	consume(par, TokenType.KThen)
+	var then_ = AstStmt.Block(parseStmtList(par))
+	var else_ = parseElse(par)
+	
+	return AstStmt.If(cond, then_, else_)
+end
+
+function parseElse(par:ParserContext):MaybeAstStmt
+	var loc = getLocation(par)
+	if isNextToken(par, TokenType.KEnd) then
+		take(par)
+		return MaybeAstStmt.Nothing
+	elif isNextToken(par, TokenType.KElse) then
+		take(par)
+		var block = parseStmtList(par)
+		consume(par, TokenType.KEnd)
+		return MaybeAstStmt.Just(AstStmt.Block(block))
+	elif isNextToken(par, TokenType.KElIf) then
+		take(par)
+		var stmt = parseIf(par)		
+		stmt.loc = loc
+		return MaybeAstStmt.Just(stmt)
+	else
+		ParserError(par, "expected else, elif or end")
+	end
+end
+
+function parsePatternListTail(par:ParserContext):AstPatternList
+	if isNextToken(par, TokenType.Comma) then
+		take(par)
+		var pat = parsePattern(par)
+		return AstPatternList.Cons(pat, parsePatternListTail(par))
+	else
+		return AstPatternList.Nil
+	end
+end
+
+function parsePatternList(par:ParserContext):AstPatternList
+	var m_pat = maybeParsePattern(par)
+	match m_pat 
+	case Nothing
+		return AstPatternList.Nil
+	case Just(pat)
+		return AstPatternList.Cons(pat, parsePatternListTail(par))
+	end
+end
+
+function parsePattern(par:ParserContext):AstPattern
+	match maybeParsePattern(par) 
+	case Nothing
+		ParserError(par, "expected pattern")
+	case Just(pattern)
+		return pattern
+	end
+end
+
+function maybeParsePattern(par:ParserContext):MaybeAstPattern
+	var loc = getLocation(par)
+	var pat:AstPattern
+	if isNextToken(par, TokenType.Identifier) then
+		var binder = parseBinder(par)
+		
+		if isNextToken(par, TokenType.LParen) then
+			take(par)
+			var params = parsePatternList(par)
+			consume(par, TokenType.RParen)
+			pat = AstPattern.Cons(binder, params)
+		else
+			pat = AstPattern.Id(binder)
+		end
+	else
+		return MaybeAstPattern.Nothing
+	end
+	
+	pat.loc = loc
+	return MaybeAstPattern.Just(pat)
+end
+
+function parseMatchCase(par:ParserContext):AstCase
+	var case_ = AstCase.New
+	
+	case_.loc = getLocation(par)
+	
+	take(par)
+	
+	case_.pattern = parsePattern(par)
+	case_.block = parseStmtList(par)
+	
+	return case_
+end
+
+function parseMatchCaseList(par:ParserContext):AstCaseList
+	if isNextToken(par, TokenType.KCase) then
+		var case_ = parseMatchCase(par)
+		return AstCaseList.Cons(case_, parseMatchCaseList(par))
+	else
+		return AstCaseList.Nil
+	end
+end
+
+function parseStmt(par:ParserContext):MaybeAstStmt
+	var loc = getLocation(par)
+	var m_stmt:MaybeAstStmt = MaybeAstStmt.Nothing
+	
+	if isNextToken(par, TokenType.KVar) then
+		take(par)
+		var name = parseBinder(par)
+		var type:MaybeAstType
+		if isNextToken(par, TokenType.Colon) then
+			take(par)
+			type = MaybeAstType.Just(parseType(par))
+		else
+			type = MaybeAstType.Nothing
+		end
+		var init:MaybeAstExpr
+		if isNextToken(par, TokenType.Assign) then
+			take(par)
+			init = MaybeAstExpr.Just(parseExpr(par, 0))
+		else
+			init = MaybeAstExpr.Nothing
+		end
+		m_stmt = MaybeAstStmt.Just(AstStmt.Var(name, type, init))
+	elif isNextToken(par, TokenType.KReturn) then
+		take(par)
+		var m_expr = maybeParseExpr(par, 0)
+		m_stmt = MaybeAstStmt.Just(AstStmt.Ret(m_expr))
+	elif isNextToken(par, TokenType.KIf) then
+		take(par)
+		m_stmt = MaybeAstStmt.Just(parseIf(par))
+	elif isNextToken(par, TokenType.KWhile) then
+		take(par)
+		var cond = parseExpr(par, 0)
+		consume(par, TokenType.KDo)
+		var block = parseStmtList(par)
+		consume(par, TokenType.KEnd)
+		m_stmt = MaybeAstStmt.Just(AstStmt.While(cond, block))
+	elif isNextToken(par, TokenType.KMatch) then
+		take(par)
+		var expr = parseExpr(par, 0)
+		var cases = parseMatchCaseList(par)
+		consume(par, TokenType.KEnd)
+		m_stmt = MaybeAstStmt.Just(AstStmt.Match(expr, cases))
+	else
+		var m_expr = maybeParseExpr(par, 0)
+		match m_expr
+		case Just(expr)
+			if isNextToken(par, TokenType.Assign) then
+				take(par)
+				var rhs = parseExpr(par, 0)
+				m_stmt = MaybeAstStmt.Just(AstStmt.Assign(expr, rhs))
+			else
+				m_stmt = MaybeAstStmt.Just(AstStmt.Eval(expr))
+			end
+		end
+	end
+	
+	match m_stmt
+	case Just(stmt)
+		stmt.loc = loc
+	end
+
+	return m_stmt
+end
+
+function parseStmtList(par:ParserContext):AstStmtList
+	match parseStmt(par) 
+	case Nothing
+		return AstStmtList.Nil
+	case Just(stmt)
+		return AstStmtList.Cons(stmt, parseStmtList(par))
+	end
+end
+
+function parseFunctionBody(par:ParserContext):AstFuncBody
+	var loc = getLocation(par)
+	var body:AstFuncBody
+	if isNextToken(par, TokenType.KImport) then
+		take(par)
+		body = AstFuncBody.FFIImport(consume(par, TokenType.StringLiteral).content)
+	else
+		body = AstFuncBody.Block(parseStmtList(par))
+		consume(par, TokenType.KEnd)
+	end
+	body.loc = loc
+	return body
+end
+
+function parseFunction(par:ParserContext):AstTopLevel
+	var loc = getLocation(par)
+	take(par)
+	
+	var name = parseBinder(par)
+	consume(par, TokenType.LParen)
+	var params = parseParamList(par)
+	consume(par, TokenType.RParen)
+	var retType:MaybeAstType
+	if isNextToken(par, TokenType.Colon) then
+		take(par)
+		retType = MaybeAstType.Just(parseType(par))
+	else
+		retType = MaybeAstType.Nothing
+	end
+	
+	var body = parseFunctionBody(par)
+	
+	var fun = AstTopLevel.Function(name, params, retType, body)
+	fun.loc = loc
+	return fun
+end
+
+function parseGlobal(par:ParserContext):AstTopLevel
+	var loc = getLocation(par)
+	take(par)
+	
+	var name = parseBinder(par)
+	consume(par, TokenType.Colon)
+	var type = parseType(par)
+	consume(par, TokenType.Assign)
+	var init = parseExpr(par, 0)
+	
+	var global_ = AstTopLevel.Global(name, type, init)
+	global_.loc = loc
+	return global_
+end
+
+function parseTLDs(par:ParserContext):AstTopLevelList
+	if isNextToken(par, TokenType.KADT) then
+		var adt_ = parseADT(par)
+		return AstTopLevelList.Cons(adt_, parseTLDs(par))
+	elif isNextToken(par, TokenType.KFunction) then
+		var fun = parseFunction(par)
+		return AstTopLevelList.Cons(fun, parseTLDs(par))
+	elif isNextToken(par, TokenType.KGlobal) then
+		var global_ = parseGlobal(par)
+		return AstTopLevelList.Cons(global_, parseTLDs(par))
+	else
+		return AstTopLevelList.Nil
+	end
+end
+
+function parseParam(par:ParserContext):AstParam
+	var name = parseBinder(par)
+	consume(par, TokenType.Colon)
+	var type = parseType(par)
+	var param = AstParam.New
+	param.name = name
+	param.type = type
+	return param
+end
+
+function parseParamListTail(par:ParserContext):AstParamList
+	if isNextToken(par, TokenType.Comma) then
+		take(par)
+		var param_ = parseParam(par)
+		return AstParamList.Cons(param_, parseParamListTail(par))
+	else
+		return AstParamList.Nil
+	end
+end
+
+function parseParamList(par:ParserContext):AstParamList
+	if isNextToken(par, TokenType.Identifier) then
+		var param_ = parseParam(par)
+		return AstParamList.Cons(param_, parseParamListTail(par))
+	else
+		return AstParamList.Nil
+	end
+end
+
+function parseADTCons(par:ParserContext):AstADTCons
+	var name = parseBinder(par)
+	var params:AstParamList
+	
+	if isNextToken(par, TokenType.LParen) then
+		take(par)
+		params = parseParamList(par)
+		consume(par, TokenType.RParen)
+	else
+		params = AstParamList.Nil
+	end
+	
+	var cons = AstADTCons.New
+	cons.name = name
+	cons.params = params
+	return cons
+end
+
+function parseADTConsList(par:ParserContext):AstADTConsList
+	if isNextToken(par, TokenType.Identifier) then
+		var cons = parseADTCons(par)
+		return AstADTConsList.Cons(cons, parseADTConsList(par))
+	else
+		return AstADTConsList.Nil
+	end
+end
+
+function parseTypePrim(par:ParserContext):AstType
+	if isNextToken(par, TokenType.Identifier) then
+		return AstType.Ref(parseBinder(par))
+	else
+		ParserError(par, "expected type")
+	end
+end
+
+function parseType(par:ParserContext):AstType
+	var loc = getLocation(par)
+	var type = parseTypePrim(par)
+	type.loc = loc
+	
+	while true do
+		loc = getLocation(par)
+		if isNextToken(par, TokenType.LBracket) then
+			take(par)
+			var size = maybeParseExpr(par, 0)
+			consume(par, TokenType.RBracket)
+			
+			type = AstType.Array(type, size)
+		else
+			return type
+		end
+		type.loc = loc
+	end
+	
+	return type
+end
+
+function ParserParseFile(par:ParserContext, file:AstFile)
+	file.imports = parseImports(par)
+	
+	file.tlds = parseTLDs(par)
+end	

@@ -32,7 +32,6 @@ adt TokenType
 	KFunction
 	KEnd
 	KVar
-	KType
 	KStruct
 	KField
 	KNew
@@ -53,10 +52,57 @@ adt TokenType
 	EOF
 end
 
+function TokenTypeToNum(tt:TokenType):i32
+	match tt
+	case Identifier return 0
+	case StringLiteral return 1
+	case NumberLiteral return 2
+	case Dot return 3
+	case LParen return 4
+	case RParen return 5
+	case Colon return 6
+	case Comma return 7
+	case LBracket return 8
+	case RBracket return 9
+	case Assign return 10
+	case CmpEQ return 11
+	case CmpNE return 12
+	case CmpLT return 13
+	case CmpGT return 14
+	case CmpLE return 15
+	case CmpGE return 16
+	case Minus return 17
+	case Plus return 18
+	case Divide return 19
+	case Multiply return 20
+	case KImport return 21
+	case KFunction return 22
+	case KEnd return 23
+	case KVar return 24
+	case KType return 25
+	case KStruct return 26
+	case KField return 27
+	case KNew return 28
+	case KReturn return 29
+	case KIf return 30
+	case KThen return 31
+	case KElse return 32
+	case KElIf return 33
+	case KWhile return 34
+	case KDo return 35
+	case KAnd return 36
+	case KOr return 37
+	case KADT return 38
+	case KMatch return 39
+	case KCase return 40
+	case KGlobal return 41
+	case EOF return 42
+	end
+end
 
-function TokenGetName(token:Token):string
-	match token.tt
-	case Identifier return "id:" + token.content
+function TokenTypeGetName(tt:TokenType):string
+	match tt
+	case Identifier return "id"
 	
 	case Dot return "."
 	case LParen return "("
@@ -88,8 +134,8 @@ function TokenGetName(token:Token):string
 	case KCase return "KCase"
 	case KGlobal return "KGlobal"
 	
-	case StringLiteral return "string_lit:" + token.content
-	case NumberLiteral return "number_lit:" + token.content
+	case StringLiteral return "string_lit"
+	case NumberLiteral return "number_lit"
 	
 	case Minus return "-"
 	case Plus return "+"
@@ -107,6 +153,16 @@ function TokenGetName(token:Token):string
 	
 	case EOF return "eof"
 	end
+end
+
+function TokenGetName(token:Token):string
+	var result = TokenTypeGetName(token.tt)
+	match token.tt
+	case Identifier return result + ":" + token.content
+	case StringLiteral return result + ":" + token.content
+	case NumberLiteral return result + ":" + token.content
+	end
+	return result
 end
 
 adt Token

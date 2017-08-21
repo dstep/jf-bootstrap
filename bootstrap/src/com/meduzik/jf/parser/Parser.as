@@ -137,10 +137,6 @@ package com.meduzik.jf.parser {
 				take();
 				tld = parseStruct();
 			}break;
-			case TokenType.Type:{
-				take();
-				tld = parseTypeDecl();
-			}break;
 			}
 			
 			if ( tld ){
@@ -358,9 +354,12 @@ package com.meduzik.jf.parser {
 					type = parseType();
 				}
 				
-				consume(TokenType.Assign);
+				var expr:AstExpr
 				
-				var expr:AstExpr = parseExpr();
+				if ( peek == TokenType.Assign ){
+					take();				
+					expr = parseExpr();
+				}
 				
 				stmt = new AstStmtVar(binder, type, expr);
 			}break;

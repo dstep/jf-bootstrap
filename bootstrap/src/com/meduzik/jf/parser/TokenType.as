@@ -34,7 +34,6 @@ package com.meduzik.jf.parser {
 		public static const Function:TokenType = new TokenType("function");
 		public static const End:TokenType = new TokenType("end");
 		public static const Var:TokenType = new TokenType("var");
-		public static const Type:TokenType = new TokenType("type");
 		public static const Struct:TokenType = new TokenType("struct");
 		public static const Field:TokenType = new TokenType("field");
 		public static const New:TokenType = new TokenType("new");
@@ -80,7 +79,6 @@ package com.meduzik.jf.parser {
 			"function" : Function,
 			"end" : End,
 			"var" : Var,
-			"type" : Type,
 			"struct" : Struct,
 			"field" : Field,
 			"new" : New,

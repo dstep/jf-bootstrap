@@ -1,5 +1,5 @@
 import main.ast
-import core.prelude
+import main.prelude
 import main.token
 
 function BuildKeywordTable():KeywordTable
@@ -13,7 +13,6 @@ function BuildKeywordTable():KeywordTable
 	KeywordTableInsert(table, "function", TokenType.KFunction)	
 	KeywordTableInsert(table, "end", TokenType.KEnd)	
 	KeywordTableInsert(table, "var", TokenType.KVar)	
-	KeywordTableInsert(table, "type", TokenType.KType)	
 	KeywordTableInsert(table, "struct", TokenType.KStruct)	
 	KeywordTableInsert(table, "field", TokenType.KField)	
 	KeywordTableInsert(table, "new", TokenType.KNew)	
@@ -21,7 +20,7 @@ function BuildKeywordTable():KeywordTable
 	KeywordTableInsert(table, "if", TokenType.KIf)	
 	KeywordTableInsert(table, "then", TokenType.KThen)	
 	KeywordTableInsert(table, "else", TokenType.KElse)	
-	KeywordTableInsert(table, "elIf", TokenType.KElIf)	
+	KeywordTableInsert(table, "elif", TokenType.KElIf)	
 	KeywordTableInsert(table, "while", TokenType.KWhile)	
 	KeywordTableInsert(table, "do", TokenType.KDo)	
 	KeywordTableInsert(table, "and", TokenType.KAnd)	
@@ -114,6 +113,7 @@ function TokenStreamAdd(tokens:TokenStream, token:Token)
 			i = i + 1
 		end
 		tokens.array = newArray
+		tokens.capacity = newCapacity
 	end
 	
 	tokens.array[tokens.size] = token

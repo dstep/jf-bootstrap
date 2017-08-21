@@ -16,6 +16,9 @@
     <Filter Include="Source Files\gen">
       <UniqueIdentifier>{068f4b4a-38fb-4c7f-a459-5fd179618c9f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Jellyfish">
+      <UniqueIdentifier>{61b71229-8390-41a9-9aef-70502c0074ff}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jellyfish.c">
@@ -32,13 +35,55 @@
     <ClInclude Include="include\jellyfish.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\dirent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\bootstrap\bat\RunApp.bat">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="..\compiler\main\src\lexer.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
     <None Include="..\compiler\main\src\main.jf">
-      <Filter>Source Files</Filter>
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\parser.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ast.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ast_expr.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ast_stmt.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ast_type.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\compiler.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ir.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ir_builder.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\ir_compiler.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\llvm.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\prelude.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\token.jf">
+      <Filter>Jellyfish</Filter>
     </None>
   </ItemGroup>
 </Project>

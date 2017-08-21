@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dirent.h"
 
 jf_i32 jfprelude_LoadByte(jf_pointer ptr, jf_i32 offset){
 	return ((unsigned char*)ptr)[offset];
@@ -41,6 +42,30 @@ jf_FileData* jfprelude_ReadFile(jf_string path){
 	return data;
 }
 
+typedef struct {
+	jf_tag _unused;	
+	jf_string* files;	
+	jf_i32 count;
+} jf_DirectoryData;
+
+jf_DirectoryData* jfprelude_ReadDirectory(jf_string path){
+	jf_DirectoryData* data = malloc(sizeof(jf_DirectoryData));
+	data->count = 0;
+	data->files = malloc(sizeof(jf_string) * 256);
+
+	DIR *dir;
+	struct dirent *ent;
+	if ((dir = opendir(path)) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
+			data->files[data->count] = _strdup(ent->d_name);
+			data->count++;
+		}
+		closedir(dir);
+	}
+
+	return data;
+}
+
 void jfprelude_Write(jf_string message) {
 	printf("%s", message);
 }
@@ -52,6 +77,9 @@ jf_string jfprelude_ReadLn(jf_string message) {
 	return jf_make_string(s);
 }
 
+jf_string jfprelude_Substring(jf_string str, jf_i32 from, jf_i32 length){
+	return jfprelude_LoadString(str, from , length);
+}
 
 jf_string jfprelude_IntToStr(jf_i32 x) {
 	char buf[90];

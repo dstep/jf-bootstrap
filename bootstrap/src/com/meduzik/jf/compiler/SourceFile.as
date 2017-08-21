@@ -1,6 +1,7 @@
 package com.meduzik.jf.compiler {
 	import com.meduzik.jf.ast.ASTUnit;
 	import com.meduzik.jf.codegen.Codegen;
+	import com.meduzik.jf.codegen.CodegenError;
 	import com.meduzik.jf.codegen.FormattedWriter;
 	import com.meduzik.jf.ir.IRUnit;
 	import com.meduzik.jf.irbuilder.IRUnitBuilder;
@@ -64,7 +65,10 @@ package com.meduzik.jf.compiler {
 		public function codegen(codegen:Codegen, ctx:CompilerContext):void {
 			Diagnostic.Info("Codegen for source file", file.nativePath);
 			
-			codegen.codegen(this, ir);
+			try{
+				codegen.codegen(this, ir);
+			}catch (e:CodegenError){
+			}
 		}
 		
 	}
