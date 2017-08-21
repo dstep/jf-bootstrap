@@ -34,7 +34,6 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function parse(ctx:CompilerContext):void {
-			Diagnostic.Info("Parsing source file", file.nativePath);
 			var data:ByteArray = ReadFileData(file);
 			
 			try{
@@ -46,9 +45,7 @@ package com.meduzik.jf.compiler {
 			}
 		}
 		
-		public function buildIR(ctx:CompilerContext):void{
-			Diagnostic.Info("Building IR for source file", file.nativePath);
-			
+		public function buildIR(ctx:CompilerContext):void{		
 			ir = new IRUnitBuilder(ctx, this).resolve(ast);
 		}
 		
@@ -57,13 +54,11 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function compile(ctx:CompilerContext):void {
-			Diagnostic.Info("Compiling source file", file.nativePath);
 			
 			new IRCompiler(ctx, this).compile(ir);
 		}
 		
 		public function codegen(codegen:Codegen, ctx:CompilerContext):void {
-			Diagnostic.Info("Codegen for source file", file.nativePath);
 			
 			try{
 				codegen.codegen(this, ir);

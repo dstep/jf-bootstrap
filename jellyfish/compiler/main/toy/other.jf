@@ -1,9 +1,0 @@
-import main.test
-
-global Other:i32 = 42
-
-
-adt Baz
-	field q:Foo
-	
-end

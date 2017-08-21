@@ -1,0 +1,57 @@
+import main.bytecode
+import main.ir
+
+adt BCBuilder
+	New
+	
+	field bb:BasicBlock
+	field loc:DebugLoc
+end
+
+function BCBuilderCreate():BCBuilder
+	var builder = BCBuilder.New
+	builder.loc = DebugLoc.None
+	return builder
+end
+
+function BCBuilderSetInsertPoint(builder:BCBuilder, bb:BasicBlock)
+	builder.bb = bb
+end
+
+function BCBuilderSetDebugLoc(builder:BCBuilder, dbg:DebugLoc)
+	builder.loc = dbg
+end
+
+function BCBuilderInsert(builder:BCBuilder, ins:Instruction, ty:IRType)
+	ins.type = ty
+	ins.dbg = builder.loc
+	ins.value = ValueRef.Instr(ins)
+	BasicBlockEmit(builder.bb, ins)
+end
+
+function BCBuilderWriteVariable(builder:BCBuilder, var_:Variable, val:ValueRef)
+	var ins = Instruction.WriteVariable(var_, val)
+	BCBuilderInsert(builder, ins, IRType.Prim(IRPrimType.Unit))
+end
+
+function BCBuilderWriteGlobal(builder:BCBuilder, global_:IRGlobalDecl, val:ValueRef)
+	var ins = Instruction.WriteGlobal(global_, val)
+	BCBuilderInsert(builder, ins, IRType.Prim(IRPrimType.Unit))
+end
+
+function BCBuilderReadVariable(builder:BCBuilder, var_:Variable):ValueRef
+	var ins = Instruction.ReadVariable(var_)
+	BCBuilderInsert(builder, ins, var_.type)
+	return ins.value
+end
+
+function BCBuilderReadGlobal(builder:BCBuilder, global_:IRGlobalDecl):ValueRef
+	var ins = Instruction.ReadGlobal(global_)
+	BCBuilderInsert(builder, ins, global_.type.type)
+	return ins.value
+end
+
+
+function BCBuilderReturn(builder:BCBuilder, val:ValueRef)
+	BCBuilderInsert(builder, Instruction.Return(val), IRType.Prim(IRPrimType.Unit))
+end

@@ -3,6 +3,7 @@ import main.ast_expr
 import main.ast_type
 import main.ast_stmt
 import main.prelude
+import main.bytecode
 
 adt IRImport
 	New
@@ -55,6 +56,7 @@ adt IRBlockNode
 	New
 	
 	field ast:AstStmtList
+	field frame:FunctionFrame
 end
 	
 adt IRADTDecl
@@ -142,6 +144,17 @@ adt IRPrimType
 	
 end
 
+function PrimGetTag(prim:IRPrimType):i32
+	match prim
+	case Unit return 0
+	case I32 return 1
+	case String return 2
+	case Pointer return 3
+	case Bool return 4
+	case other WriteLn("prim type not implemented") Exit(1)
+	end
+end
+
 adt IRTypeReference
 	New
 	
@@ -158,6 +171,11 @@ adt IRType
 	ADTMetaclass(decl:IRADTDecl)
 	ArrayUnsized(elementType:IRType)
 	ArraySized(elementType:IRType, size:IRExprNode)
+end
+
+adt MaybeIRType
+	Nothing 
+	Just(val:IRType)
 end
 
 adt IRSymbolList

@@ -29,7 +29,6 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function parse(ctx:CompilerContext):void {
-			Diagnostic.Info("Parsing module", id);
 			var moduleInfo:Object = JSON.parse(ReadFileContents(path.resolvePath("module.json")));
 			
 			name = moduleInfo.name;

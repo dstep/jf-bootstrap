@@ -1,13 +1,12 @@
-import main.other
+global t:i32 = 0
 
-adt Foo
-	Y
-	X(x:Bar)
-	Z(f:string)
+function foo(x:i32, y:string):i32
+	var a:i32 = 1
 	
-	field x:i32
+	x = 2
+	
+	t = 1
+	
+	return t
 end
 
-adt Bar
-
-end

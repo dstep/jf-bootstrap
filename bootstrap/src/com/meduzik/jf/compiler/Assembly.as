@@ -21,7 +21,6 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function resolve(ctx:CompilerContext):void {
-			Diagnostic.Info("Resolving assembly", id);
 			module = ctx.getModule(modulePath);
 		}
 		

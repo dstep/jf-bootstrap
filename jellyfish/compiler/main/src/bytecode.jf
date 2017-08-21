@@ -1,0 +1,152 @@
+import main.ir
+import main.ast
+import main.prelude
+
+adt ValueRef
+	Instr(instr:Instruction)
+	ConstNum(val:i32, type:IRType)
+	ConstString(val:string, type:IRType)
+	ConstUnit
+end
+
+adt MaybeValueRef
+	Nothing
+	Just(val:ValueRef)
+end
+
+adt WritableReference
+	Variable(var_:Variable)
+	Global(global_:IRGlobalDecl)
+end
+
+adt DebugLoc
+	None
+	At(source:SourceFileRef, loc:SrcLoc)
+end
+
+adt FunctionFrame
+	New
+	
+	field vars:VariableList
+	
+	field entry:BasicBlock
+	field blocks:BasicBlockList
+end
+
+adt TemporaryContext
+end
+
+adt Variable
+	Parameter(param:IRParam)
+	Var(name:string)
+	Temporary(context:TemporaryContext)
+
+	field type:IRType
+	field dbg:DebugLoc
+end
+
+adt VariableList
+	Nil
+	Cons(var_:Variable, tail:VariableList)
+end
+
+adt BasicBlockList
+	Nil
+	Cons(block:BasicBlock, tail:BasicBlockList)
+end
+
+adt BasicBlock
+	New
+	
+	field instructions:Instruction[]
+	field size:i32
+	field capacity:i32
+end
+
+adt Instruction
+	WriteVariable(var_:Variable, value:ValueRef)
+	ReadVariable(var_:Variable) 
+	CallGlobal(global_:IRGlobalDecl, args:ValueRefList)
+	ReadGlobal(global_:IRGlobalDecl)
+	WriteGlobal(global_:IRGlobalDecl, value:ValueRef)
+	Return (ref:ValueRef)
+	
+	field dbg:DebugLoc
+	field type:IRType
+	field value:ValueRef
+end
+
+adt ValueRefList
+	Nil
+	Cons(ref:ValueRef, tail:ValueRefList)
+end
+
+function FunctionFrameCreate():FunctionFrame
+	var frame = FunctionFrame.New
+	frame.vars = VariableList.Nil
+	frame.blocks = BasicBlockList.Nil
+	frame.entry = BasicBlockCreate(frame)
+	return frame
+end
+
+adt Coerce
+	None
+	ID
+end
+
+function FunctionFrameAddVar(frame:FunctionFrame, var_:Variable)
+	frame.vars = VariableList.Cons(var_, frame.vars)
+end
+
+function BasicBlockCreate(frame:FunctionFrame):BasicBlock
+	var bb = BasicBlock.New
+	bb.size = 0
+	bb.capacity = 0
+	frame.blocks = BasicBlockList.Cons(bb, frame.blocks)
+	return bb
+end
+
+function WritableReferenceGetType(ref:WritableReference):IRType
+	match ref
+	case Variable(var_)
+		return var_.type
+	case Global(global_)
+		return global_.type.type
+	case other
+		WriteLn("writable reference not implemented")
+		Exit(1)
+	end
+end
+
+function ValueRefGetType(value:ValueRef):IRType
+	match value
+	case Instr(instr)
+		return instr.type
+	case ConstNum(num, ty)
+		return ty
+	case ConstString(str, ty)
+		return ty
+	case ConstUnit
+		return IRType.Prim(IRPrimType.Unit)
+	case other
+		WriteLn("value ref not implemented")
+		Exit(1)
+	end
+end
+
+function BasicBlockEmit(bb:BasicBlock, instr:Instruction)
+	if bb.capacity == bb.size then
+		var newCapacity = bb.capacity * 2 + 1
+		var arr = new Instruction[newCapacity]
+		var i = 0
+		while i < bb.size do
+			arr[i] = bb.instructions[i]
+			i = i + 1
+		end
+		bb.capacity = newCapacity
+		bb.instructions = arr
+	end
+	
+	bb.instructions[bb.size] = instr
+	bb.size = bb.size + 1
+end

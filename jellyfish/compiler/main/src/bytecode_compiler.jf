@@ -1,0 +1,457 @@
+import main.bytecode
+import main.ir
+import main.compiler
+import main.ast
+import main.prelude
+import main.bytecode_builder
+import main.ast_stmt
+import main.ast_expr
+import main.ast_type
+
+import main.ir_builder
+import main.ir_compiler
+
+adt BCCompiler
+	New
+	
+	field context:CompilerContext
+	field file:IRSourceFile
+	
+	field retTy:IRType
+	field frame:FunctionFrame
+	field builder:BCBuilder
+	
+	field irBuilder:IRBuilder
+	field irCompiler:IRCompiler
+	
+	field scope:Scope
+end
+
+adt ScopeBinding
+	Nil
+	Binding(name:string, ref:LocalRef, next:ScopeBinding)
+end
+
+adt Scope
+	New
+	
+	field parent:Scope
+	field binding:ScopeBinding
+end
+
+adt MaybeScope
+	Nothing
+	Just(value:Scope)
+end
+
+adt LocalRef
+	Value(value:ValueRef)
+	Variable(var_:Variable)
+	Global(symbol:IRSymbol)
+end
+
+adt MaybeLocalRef
+	Nothing
+	Just(val:LocalRef)
+end
+
+function BCCompile(context:CompilerContext)
+	BCCompileUnits(context, context.units)
+end
+
+function BCCompileUnits(context:CompilerContext, units:IRCompilationUnitList)
+	var units = context.units
+	while true do
+		match units
+		case Nil 
+			return
+		case Cons(unit_, tail)
+			BCCompileUnit(context, unit_)
+			units = tail
+		end
+	end
+end
+
+function BCCompileUnit(context:CompilerContext, unit_:IRCompilationUnit)
+	var files = unit_.files
+	while true do
+		match files
+		case Nil
+			return
+		case Cons(file, tail)
+			BCCompileFile(context, file)
+			files = tail			
+		end
+	end
+end
+
+function BCCompileFile(context:CompilerContext, file:IRSourceFile)
+	var compiler = BCCompilerCreate(context, file)
+	
+	WriteLn("+++ Running bytecode compilation on " + file.file.path + " +++")
+	
+	BCCompileSymbols(compiler, file.symbols)
+	
+	WriteLn("--- Leaving " + file.file.path + " ---")
+end
+
+
+function BCCompilerCreate(context:CompilerContext, file:IRSourceFile):BCCompiler
+	var bc:BCCompiler = BCCompiler.New
+	bc.context = context
+	bc.file = file
+	bc.builder = BCBuilderCreate()
+	bc.irBuilder = IRBuilderCreate(context)
+	bc.irBuilder.file = file
+	bc.irCompiler = IRCompilerCreate(context, file)
+	
+	--create root scope
+	var scope = Scope.New
+	scope.parent = scope
+	scope.binding = ScopeBinding.Nil
+	bc.scope = scope
+	
+	return bc
+end
+
+function BCCompileSymbols(bc:BCCompiler, symbols:IRSymbolList)
+	while true do
+		match symbols
+		case Nil return
+		case Cons(symbol, tail)
+			BCompileSymbol(bc, symbol)
+			symbols = tail
+		end
+	end
+end
+
+function BCCompilerError(compiler:BCCompiler, loc:SrcLoc, message:string)
+	match loc
+	case At(line, col)
+		WriteLn(compiler.file.file.path + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): BCCompiler Error: " + message)
+	end
+	Exit(1)
+end
+
+
+function BCompileSymbol(bc:BCCompiler, symbol:IRSymbol)
+	match symbol
+	case ADT(adt_)
+		--do nothing for adt yet
+	case Global(global_)
+		--do nothing for globals yet
+	case Function(fun)
+		BCCompileFunction(bc, fun)
+	case other
+		BCCompilerError(bc, symbol.loc, "symbol not implemented")
+	end
+end
+
+function BCCompileFunction(bc:BCCompiler, fun:IRFunctionDecl)
+	match fun.body
+	case Block(block)		
+		BCEnterFuction(bc, fun)	
+
+		var frame = FunctionFrameCreate()
+		block.frame = frame
+		BCEnterFrame(bc, frame)		
+		BCCompilerEnterScope(bc)
+		
+		BCInjectParameters(bc, fun, frame)
+		
+		BCCompileCode(bc, block.ast)
+		BCCompilerLeaveScope(bc)	
+		BCLeaveFrame(bc)
+		
+		BCLeaveFunction(bc)
+	end
+end
+
+function BCEnterFuction(bc:BCCompiler, fun:IRFunctionDecl)
+	bc.retTy = fun.retTy.type
+end
+
+function BCLeaveFunction(bc:BCCompiler)
+	
+end
+
+
+function BCEnterFrame(bc:BCCompiler, frame:FunctionFrame)
+	--no nested frames yet!
+	bc.frame = frame
+	BCBuilderSetInsertPoint(bc.builder, frame.entry)
+end
+
+function BCLeaveFrame(bc:BCCompiler)
+end
+
+function BCCompilerEnterScope(bc:BCCompiler):Scope
+	var scope = Scope.New
+	scope.parent = bc.scope
+	scope.binding = ScopeBinding.Nil
+	bc.scope = scope
+	return scope
+end
+
+function BCCompilerLeaveScope(bc:BCCompiler):Scope
+	var oldScope = bc.scope
+	bc.scope = bc.scope.parent
+	return oldScope
+end
+
+function BCCompilerVarInitialized(bc:BCCompiler, var_:Variable)
+end
+
+function BCInjectParameters(bc:BCCompiler, fun:IRFunctionDecl, frame:FunctionFrame)
+	var params = fun.params
+	while true do
+		match params
+		case Nil return
+		case Cons(param, tail)
+			var var_ = Variable.Parameter(param)
+			var_.type = param.type.type
+			var_.dbg = DbgLocCreate(bc, param.loc)
+			params = tail
+			
+			BCCompilerAddScopeRef(bc, param.name, LocalRef.Variable(var_))
+		end
+	end
+end
+
+function BCCompilerAddScopeRef(bc:BCCompiler, name:string, ref:LocalRef)
+	bc.scope.binding = ScopeBinding.Binding(name, ref, bc.scope.binding)
+end
+
+function DbgLocCreate(bc:BCCompiler, loc:SrcLoc):DebugLoc
+	return DebugLoc.At(bc.file.file, loc)
+end
+
+function Loc(bc:BCCompiler, loc:SrcLoc)
+	BCBuilderSetDebugLoc(bc.builder, DbgLocCreate(bc, loc))
+end
+
+function BCCompileCode(bc:BCCompiler, ast:AstStmtList)
+	while true do
+		match ast
+		case Nil 
+			return
+		case Cons(stmt, tail)
+			BCCompileStmt(bc, stmt)
+			ast = tail			
+		end
+	end
+end
+
+function BCResolveType(bc:BCCompiler, ast:AstType):IRType
+	var type = IRBuildType(bc.irBuilder, ast)
+	type = IRCompileType(bc.irCompiler, ast.loc, type)
+	return type
+end
+
+function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
+	match ast 
+	case Var(name, m_type, m_init)
+		var varType:IRType
+		var varInit:MaybeValueRef = MaybeValueRef.Nothing
+		
+		match m_type
+		case Nothing
+			match m_init
+			case Nothing BCCompilerError(bc, ast.loc, "either type declaration or init expression is required")
+			case Just(init)
+				var val = BCCompileExprNoHint(bc, init)
+				varType = ValueRefGetType(val)
+				varInit = MaybeValueRef.Just(val)
+			end
+		case Just(astType)
+			varType = BCResolveType(bc, astType)
+			match m_init
+			case Nothing 
+				--do nothing
+			case Just(init)
+				varInit = MaybeValueRef.Just(BCCompileExprAs(bc, init, varType))
+			end
+		end
+		
+		var var_ = Variable.Var(BinderGetName(name))
+		var_.dbg = DbgLocCreate(bc, ast.loc)
+		var_.type = varType
+		FunctionFrameAddVar(bc.frame, var_)
+		
+		BCCompilerAddScopeRef(bc, BinderGetName(name), LocalRef.Variable(var_))
+		
+		match varInit
+		case Just(init)
+			Loc(bc, ast.loc)
+			BCBuilderWriteVariable(bc.builder, var_, init)
+			BCCompilerVarInitialized(bc, var_)
+		end
+	case Eval(expr)
+		BCCompileExprNoHint(bc, expr)
+	case Assign(lhs, rhs)
+		var ref = BCCompileWritableReference(bc, lhs)
+		var val = BCCompileExprAs(bc, rhs, WritableReferenceGetType(ref))
+		
+		Loc(bc, ast.loc)
+		
+		match ref
+		case Variable(var_)
+			BCBuilderWriteVariable(bc.builder, var_, val)
+		case Global(global_)
+			BCBuilderWriteGlobal(bc.builder, global_, val)
+		case other
+			BCCompilerError(bc, ast.loc, "reference type is not implemented")
+		end
+	case Ret(m_expr)
+		var value:ValueRef
+		match m_expr
+		case Nothing
+			value = BCCompileCoerce(bc, ast.loc, ValueRef.ConstUnit, bc.retTy)
+		case Just(expr)
+			value = BCCompileExprAs(bc, expr, bc.retTy)
+		end
+		Loc(bc, ast.loc)
+		BCBuilderReturn(bc.builder, value)
+	case Block(stmts)
+		BCCompilerEnterScope(bc)
+		BCCompileCode(bc, stmts)
+		BCCompilerLeaveScope(bc)
+	case other
+		BCCompilerError(bc, ast.loc, "statement is not implemented")
+	end
+end
+
+function BCCompileWritableReference(bc:BCCompiler, ast:AstExpr):WritableReference
+	match ast
+	case Id(id)
+		var ref = BCCompilerResolveRef(bc, ast.loc, id)
+		match ref
+		case Value(val)
+			BCCompilerError(bc, ast.loc, "temporary value is not writable")
+		case Variable(var_)
+			return WritableReference.Variable(var_)
+		case Global(symbol)
+			match symbol
+			case Global(global_)
+				return WritableReference.Global(global_)
+			case other
+				BCCompilerError(bc, ast.loc, "writing to this symbol reference is not implemented")
+			end
+		case other
+			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+		end
+	case other BCCompilerError(bc, ast.loc, "expression is not implemented as a writable reference") 
+	end
+end
+
+function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
+	Loc(bc, ast.loc)
+	match ast
+	case NumberLit(content)
+		var num = StrToInt(content)
+		return ValueRef.ConstNum(num, IRType.Prim(IRPrimType.I32))
+	case StringLit(content)
+		var str = DecodeStr(content)
+		return ValueRef.ConstString(str, IRType.Prim(IRPrimType.String))
+	case Id(id)
+		var ref = BCCompilerResolveRef(bc, ast.loc, id)
+		match ref
+		case Value(val)
+			return val
+		case Variable(var_)
+			return BCBuilderReadVariable(bc.builder, var_)
+		case Global(symbol)
+			match symbol
+			case Global(global_)
+				return BCBuilderReadGlobal(bc.builder, global_)
+			case other
+				BCCompilerError(bc, ast.loc, "reading this symbol reference is not implemented")
+			end
+		case other
+			BCCompilerError(bc, ast.loc, "reading this reference is not implemented")
+		end
+	case other BCCompilerError(bc, ast.loc, "expression not implemented")
+	end
+end
+
+function BCCompilerResolveRef(bc:BCCompiler, loc:SrcLoc, id:string):LocalRef
+	return BCCompilerResolveRefInScope(bc, loc, id, bc.scope)
+end
+
+function BCCompilerResolveRefInScope(bc:BCCompiler, loc:SrcLoc, id:string, scope:Scope):LocalRef
+	var binding = scope.binding
+	while true do
+		match binding
+		case Nil
+			if scope.parent == scope then
+				return BCCompilerResolveGlobal(bc, loc, id, scope)
+			else
+				scope = scope.parent
+				binding = scope.binding
+			end
+		case Binding(name, ref, tail)
+			if name == id then
+				return ref
+			end
+			binding = tail
+		end
+	end
+end
+
+function BCCompilerResolveGlobal(bc:BCCompiler, loc:SrcLoc, id:string, scope:Scope):LocalRef
+	var symbol = IRResolveGlobalSymbol(bc.irCompiler, loc, id)
+	var ref = LocalRef.Global(symbol)
+	scope.binding = ScopeBinding.Binding(id, ref, scope.binding)
+	return ref
+end
+
+function BCCompileExprNoHint(bc:BCCompiler, ast:AstExpr):ValueRef
+	return BCCompileExpr(bc, ast, MaybeIRType.Nothing)
+end
+
+function BCCompileExprAs(bc:BCCompiler, ast:AstExpr, type:IRType):ValueRef
+	var val = BCCompileExpr(bc, ast, MaybeIRType.Just(type))
+	val = BCCompileCoerce(bc, ast.loc, val, type)
+	return val
+end
+
+function BCCompileCoerce(bc:BCCompiler, loc:SrcLoc, val:ValueRef, targetType:IRType):ValueRef
+	var actualType = ValueRefGetType(val)
+	var coerce = BCCompileFindCoerce(bc, actualType, targetType)
+	match coerce
+	case None BCCompilerError(bc, loc, "can't coerce type")
+	case ID return val
+	case other BCCompilerError(bc, loc, "coercion not implemented")
+	end
+end
+
+function BCCompileFindCoerce(bc:BCCompiler, actualType:IRType, targetType:IRType):Coerce
+	match actualType
+	case Prim(ty1)
+		match targetType
+		case Prim(ty2)
+			if PrimGetTag(ty1) == PrimGetTag(ty2) then
+				return Coerce.ID
+			end
+		end
+	case ADT(decl1)
+		match targetType
+		case ADT(decl2)
+			if decl1 == decl2 then
+				return Coerce.ID
+			end
+		end
+	case ArrayUnsized(elTy1)
+		match targetType
+		case ArrayUnsized(elTy2)
+			match BCCompileFindCoerce(bc, elTy1, elTy2)
+			case ID
+				return Coerce.ID
+			end
+		end
+	end
+	
+	return Coerce.None
+end
+
+

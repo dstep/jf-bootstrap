@@ -4,6 +4,8 @@ import main.prelude
 adt CompilerContext
 	New
 	
+	field output:string
+	
 	field units:IRCompilationUnitList
 end
 

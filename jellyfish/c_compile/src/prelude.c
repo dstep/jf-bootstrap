@@ -42,6 +42,21 @@ jf_FileData* jfprelude_ReadFile(jf_string path){
 	return data;
 }
 
+void jfprelude_RemoveFile(jf_string path){
+	_unlink(path);
+}
+
+void jfprelude_WriteFile(jf_string path, jf_string data){
+	FILE* f = fopen(path, "wb");
+	if ( !f ){
+		return;
+	}
+
+	fwrite(data, strlen(data), 1, f);
+
+	fclose(f);
+}
+
 typedef struct {
 	jf_tag _unused;	
 	jf_string* files;	
@@ -78,7 +93,7 @@ jf_string jfprelude_ReadLn(jf_string message) {
 }
 
 jf_string jfprelude_Substring(jf_string str, jf_i32 from, jf_i32 length){
-	return jfprelude_LoadString(str, from , length);
+	return jfprelude_LoadString((void*)str, from , length);
 }
 
 jf_string jfprelude_IntToStr(jf_i32 x) {
@@ -101,4 +116,44 @@ jf_i32 jfprelude_StringLength(jf_string s) {
 void jfprelude_Exit(jf_i32 code){
 	system("pause");
 	exit(code);
+}
+
+jf_string jfprelude_DecodeStr(jf_string s){
+	size_t n = strlen(s);
+	char* buffer = malloc(n + 1);
+	char* out = buffer;
+	for ( size_t i = 1; i < n - 1; i++ ){
+		if ( s[i] == '\\' ){
+			i++;
+			switch ( s[i + 1] ){
+			case '0': {
+				*out = '\0';
+				out++;
+			}break;
+			case 'n': {
+				*out = '\n';
+				out++;
+			}break;
+			case 't': {
+				*out = '\t';
+				out++;
+			}break;
+			case 'r': {
+				*out = '\r';
+				out++;
+			}break;
+			default:{
+				*out = s[i];
+				out++;
+			}break;
+			}
+		}else{
+			*out = s[i];
+			out++;
+		}
+	}
+	*out = 0;
+	jf_string ret = jf_make_string(buffer);
+	free(buffer);
+	return ret;
 }

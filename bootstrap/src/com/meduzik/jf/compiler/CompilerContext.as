@@ -47,7 +47,6 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function addAssembly(key:String, assembly:Assembly):void {
-			Diagnostic.Info("Registered assembly", key);
 			assemblies.push(assembly);
 			assemblyMap[key] = assembly;
 		}
@@ -98,7 +97,6 @@ package com.meduzik.jf.compiler {
 			}
 			
 			var module:Module = Module.Create(this, modulePath, projectRoot.resolvePath(modulePath));
-			Diagnostic.Info("Registered module", modulePath);
 			modules.push(module);
 			moduleMap[modulePath] = module;
 			return module;

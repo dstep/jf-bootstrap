@@ -1,0 +1,117 @@
+import main.compiler
+import main.ir
+import main.bytecode
+import main.llvm
+import main.ast
+import main.prelude
+
+adt LLVMCodegen
+	New
+	
+	field context:CompilerContext
+	field file:IRSourceFile
+	
+	field module:pointer
+end
+
+global llvm:pointer = LLVMContextCreate()
+
+function RunLLVMCodegen(context:CompilerContext)
+	LLVMCodegenUnits(context, context.units)
+end
+
+function LLVMCodegenUnits(context:CompilerContext, units:IRCompilationUnitList)
+	var units = context.units
+	while true do
+		match units
+		case Nil 
+			return
+		case Cons(unit_, tail)
+			LLVMCodegenUnit(context, unit_)
+			units = tail
+		end
+	end
+end
+
+function LLVMCodegenUnit(context:CompilerContext, unit_:IRCompilationUnit)
+	var files = unit_.files
+	while true do
+		match files
+		case Nil
+			return
+		case Cons(file, tail)
+			LLVMCodegenFile(context, file)
+			files = tail			
+		end
+	end
+end
+
+function LLVMCodegenFile(context:CompilerContext, file:IRSourceFile)
+	var codegen = LLVMCodegenCreate(context, file)
+	
+	WriteLn("+++ Running llvm codegen on " + file.file.path + " +++")
+	
+	var fullName = file.unit_.name
+	if file.file.suffix <> "" then
+		fullName = fullName + "@" + file.file.suffix
+	end
+	
+	codegen.module = LLVMModuleCreateWithNameInContext(fullName, llvm)
+	
+	LLVMCodegenSymbols(codegen, file.symbols)
+	
+	var moduleString = LLVMPrintModuleToString(codegen.module)
+	
+	var filePath = context.output + "/" + fullName + ".ll"
+	WriteFile(filePath, moduleString)
+	
+	WriteLn("--- Leaving " + file.file.path + " ---")
+end
+
+
+function LLVMCodegenCreate(context:CompilerContext, file:IRSourceFile):LLVMCodegen
+	var codegen:LLVMCodegen = LLVMCodegen.New
+	codegen.context = context
+	codegen.file = file
+	
+	return codegen
+end
+
+function LLVMCodegenSymbols(codegen:LLVMCodegen, symbols:IRSymbolList)
+	while true do
+		match symbols
+		case Nil return
+		case Cons(symbol, tail)
+			LLVMCodegenSymbol(codegen, symbol)
+			symbols = tail
+		end
+	end
+end
+
+function LLVMCodegenError(codegen:LLVMCodegen, loc:SrcLoc, message:string)
+	match loc
+	case At(line, col)
+		WriteLn(codegen.file.file.path + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): LLVMCodegen Error: " + message)
+	end
+	Exit(1)
+end
+
+function LLVMCodegenSymbol(codegen:LLVMCodegen, symbol:IRSymbol)
+	match symbol
+	case ADT(adt_)
+		--do nothing for adt yet
+	case Global(global_)
+		LLVMCodegenGlobal(codegen, global_)
+	case Function(fun)
+		LLVMCodegenFunction(codegen, fun)
+	case other
+		LLVMCodegenError(codegen, symbol.loc, "symbol not implemented")
+	end
+end
+
+function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
+end
+
+function LLVMCodegenFunction(codegen:LLVMCodegen, fun:IRFunctionDecl)
+end
+

@@ -9,6 +9,10 @@ import main.compiler
 
 import main.ir_compiler
 
+import main.bytecode_compiler
+
+import main.llvm_codegen
+
 --lexer +
 --parser +
 --ir builder +
@@ -58,9 +62,29 @@ function ProcessDir(dirname:string)
 end
 
 function run()
-	var dir = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\src_copy"
+	var dir = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\toy"
+	
+	Compiler.output = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\self_output"
+	
+	ClearOutput(Compiler.output)
 	
 	ProcessDir(dir)	
 	
 	IRCompile(Compiler)
+	BCCompile(Compiler)
+	
+	RunLLVMCodegen(Compiler)
+end
+
+function ClearOutput(dirname:string)
+	var dir = ReadDirectory(dirname)
+	
+	var i = 0
+	while i < dir.count do
+		var entry = dir.files[i]
+		if entry <> "." and entry <> ".." then
+			RemoveFile(dirname + "\\" + entry)
+		end
+		i = i + 1
+	end
 end

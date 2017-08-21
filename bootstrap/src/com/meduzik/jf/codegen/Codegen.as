@@ -128,7 +128,7 @@ package com.meduzik.jf.codegen {
 		
 		private function codegenGlobal(global:IRGlobalVar):void{
 			types.file(global.owner, global.loc);
-			var typeName:String = getTypeName(global.type.resolution);
+			var typeName:String = getTypeName(global.type.ast.loc, global.type.resolution);
 			types.writeln(typeName + " " + mangleGlobalName(global) + ";");
 			types.loc(global.loc);
 			types.writeln(typeName + " " + mangleGlobalName(global) + "_get();");
@@ -140,7 +140,7 @@ package com.meduzik.jf.codegen {
 			var writer:FormattedWriter = new FormattedWriter();
 	
 			writer.file(global.owner, global.loc);
-			writer.writeln(getTypeName(global.type.resolution) + " " + mangleGlobalName(global) + "_get(){");
+			writer.writeln(getTypeName(global.type.ast.loc, global.type.resolution) + " " + mangleGlobalName(global) + "_get(){");
 			writer.indent();
 			writer.writeln("static jf_bool init = jf_false;");
 			writer.writeln("if ( !init ){");
@@ -172,7 +172,7 @@ package com.meduzik.jf.codegen {
 			types.writeln("struct " + mangleStructName(struct) + "_tag{");
 			for each ( var field:IRStructField in struct.fields ){
 				types.loc(field.binder.loc);
-				types.write(getTypeName(field.type.resolution, true));
+				types.write(getTypeName(field.type.ast.loc, field.type.resolution, true));
 				types.writeln(" " + field.binder.name + ";");
 			}
 			types.writeln("};");
@@ -189,14 +189,14 @@ package com.meduzik.jf.codegen {
 			types.writeln("jf_tag tag;");
 			for each ( var field:IRADTField in adt.fields ){
 				types.loc(field.binder.loc);
-				types.write(getTypeName(field.type.resolution, true));
+				types.write(getTypeName(field.type.ast.loc, field.type.resolution, true));
 				types.writeln(" " + field.binder.name + ";");
 			}
 			types.writeln("};");
 			
 			for each ( var cons:IRADTConstructor in adt.constructors ){
 				types.loc(cons.binder.loc);
-				types.write(getTypeName(adt.instanceType, true) + " ");
+				types.write(getTypeName(adt.loc, adt.instanceType, true) + " ");
 				types.write(mangleADTConstructorName(cons));
 				types.write("(");
 				codegenParams(types, cons.params);
@@ -208,7 +208,7 @@ package com.meduzik.jf.codegen {
 				types.writeln("struct " + mangleADTName(adt) + "_tag _common;");
 				for each ( var param:IRParam in cons.params ){
 					types.loc(param.binder.loc);
-					types.writeln(getTypeName(param.type.resolution, true) + " " + param.binder.name + ";");
+					types.writeln(getTypeName(param.type.ast.loc, param.type.resolution, true) + " " + param.binder.name + ";");
 				}
 				types.writeln("};");
 			}
@@ -219,7 +219,7 @@ package com.meduzik.jf.codegen {
 			
 			for each ( var cons:IRADTConstructor in adt.constructors ){
 				writer.loc(cons.binder.loc);
-				writer.write(getTypeName(adt.instanceType, true) + " ");
+				writer.write(getTypeName(adt.loc, adt.instanceType, true) + " ");
 				writer.write(mangleADTConstructorName(cons));
 				writer.write("(");
 				codegenParams(writer, cons.params);
@@ -234,7 +234,7 @@ package com.meduzik.jf.codegen {
 					writer.writeln("_instance->" + param.binder.name + " = " + getParamName(param) + ";");
 				}
 				writer.loc(cons.binder.loc);
-				writer.writeln("return (" + getTypeName(adt.instanceType, true) + ")_instance;");
+				writer.writeln("return (" + getTypeName(adt.loc, adt.instanceType, true) + ")_instance;");
 				writer.unindent();
 				writer.writeln("}");
 			}
@@ -392,7 +392,7 @@ package com.meduzik.jf.codegen {
 				var target:CExpr = codegenExpr(writer, match.expr);
 				var tmpName:String = genLocalName();
 				writer.loc(stmt.loc);
-				writer.writeln(getTypeName(target.type, true) + " " + tmpName + " = " + target.ref + ";");
+				writer.writeln(getTypeName(stmt.loc, target.type, true) + " " + tmpName + " = " + target.ref + ";");
 				
 				var adt:IRADT;
 				
@@ -438,7 +438,7 @@ package com.meduzik.jf.codegen {
 									continue;
 								}
 								var tmpName2:String = genLocalName();
-								writer.writeln(getTypeName(cons.params[i].type.resolution, true) + " " + tmpName2 + " = " + castName + "->" + cons.params[i].binder.name + ";");
+								writer.writeln(getTypeName(cons.params[i].type.ast.loc, cons.params[i].type.resolution, true) + " " + tmpName2 + " = " + castName + "->" + cons.params[i].binder.name + ";");
 								bindMatchObject(tmpName2, cons.params[i].type.resolution, subpat.binder.name);
 							}							
 						}
@@ -465,7 +465,7 @@ package com.meduzik.jf.codegen {
 					war.resolvedType = useType(tmp.type);
 				}
 				
-				writer.write(getTypeName(war.resolvedType, true));
+				writer.write(getTypeName(war.loc, war.resolvedType, true));
 				writer.write(" " + mangleVarName(war.binder));
 				if ( tmp ){
 					writer.write(" = ");
@@ -512,7 +512,7 @@ package com.meduzik.jf.codegen {
 			return codegenExpr(writer, expr, true);
 		}
 		
-		private function error(loc:SrcLoc, message:String):void{
+		private function error(loc:SrcLoc, message:String):*{
 			Diagnostic.Report(file.getFileName(), loc, message);
 			throw new CodegenError();
 		}
@@ -532,7 +532,7 @@ package com.meduzik.jf.codegen {
 					error(expr.loc, "that doesn't sound fun");
 				}
 				if ( funTy.returnType != IRPrimType.Unit ){
-					writer.write(getTypeName(funTy.returnType, true) + " " + tmpName + " = ");
+					writer.write(getTypeName(expr.loc, funTy.returnType, true) + " " + tmpName + " = ");
 				}else{
 					tmpName = "((void)0)";
 				}
@@ -575,7 +575,7 @@ package com.meduzik.jf.codegen {
 						}
 						if ( cons.params.length == 0 ){
 							tmpName = genLocalName();
-							writer.writeln(getTypeName(adt.instanceType) + " " + tmpName + " = " + mangleADTConstructorName(cons) + "();");
+							writer.writeln(getTypeName(adt.loc, adt.instanceType) + " " + tmpName + " = " + mangleADTConstructorName(cons) + "();");
 							return cexpr(adt.instanceType, tmpName);
 						}
 						if ( cons ){
@@ -586,13 +586,13 @@ package com.meduzik.jf.codegen {
 			}else if ( expr is AstNew ){
 				var newExpr:AstNew = expr as AstNew;
 				var type:IRTypeNode = resolveType(newExpr.type);
-				var typeName:String = getTypeName(type.resolution);
+				var typeName:String = getTypeName(type.ast.loc, type.resolution);
 				var localName:String = genLocalName();
 					
 				if ( type.resolution is IRTypeArray ){
 					arrTy = type.resolution as IRTypeArray;
 					var size:CExpr = codegenExpr(writer, arrTy.size);
-					writer.writeln(typeName + " " + localName + " = " + "jf_allocate_array(" + getTypeName(arrTy.type, true) + ", " + size.ref + ");");
+					writer.writeln(typeName + " " + localName + " = " + "jf_allocate_array(" + getTypeName(expr.loc, arrTy.type, true) + ", " + size.ref + ");");
 					return cexpr(type.resolution, localName);
 				}else{
 					throw new Error("NOPE");
@@ -640,6 +640,8 @@ package com.meduzik.jf.codegen {
 					resultType = IRPrimType.Bool;
 					if ( lhs.type == IRPrimType.I32 || lhs.type == IRPrimType.Pointer || lhs.type == IRPrimType.Bool ){
 						codegen = "(" + lhs.toString() + ") " + getComparisonOp(binop.op) + " (" + rhs.toString() + ")";
+					}else if ( lhs.type is IRRefType || rhs.type is IRRefType ){
+						codegen = "(" + lhs.toString() + ") " + getComparisonOp(binop.op) + " (" + rhs.toString() + ")";
 					}else if ( lhs.type == IRPrimType.Str ){
 						codegen = "jf_compare_strings(" + lhs.toString() + ", " + rhs.toString() + ")" + getComparisonOp(binop.op) + " 0";
 					}
@@ -655,7 +657,7 @@ package com.meduzik.jf.codegen {
 				}break;
 				}
 				writer.loc(binop.loc);
-				writer.writeln(getTypeName(resultType, true) + " " + tempName + " = " + codegen + ";");	
+				writer.writeln(getTypeName(binop.loc, resultType, true) + " " + tempName + " = " + codegen + ";");	
 				return cexpr(resultType, tempName);
 			}else if ( expr is AstArrayIndex ){
 				var index:AstArrayIndex = expr as AstArrayIndex;
@@ -713,7 +715,7 @@ package com.meduzik.jf.codegen {
 								return cexpr(global.type.resolution, mangleGlobalName(global));
 							}else{
 								tempName = genLocalName();
-								writer.writeln(getTypeName(global.type.resolution) + " " + tempName + " = " + mangleGlobalName(global) + "_get();");
+								writer.writeln(getTypeName(global.type.ast.loc, global.type.resolution) + " " + tempName + " = " + mangleGlobalName(global) + "_get();");
 								return cexpr(global.type.resolution, tempName);
 							}
 						}
@@ -749,7 +751,7 @@ package com.meduzik.jf.codegen {
 				if ( !first ){
 					writer.write(", ");
 				}
-				writer.write(getTypeName(param.type.resolution, true));
+				writer.write(getTypeName(param.type.ast.loc, param.type.resolution, true));
 				writer.write(" ");
 				writer.write(getParamName(param));
 				first = false;
@@ -757,7 +759,7 @@ package com.meduzik.jf.codegen {
 		}
 		
 		private function codegenSignature(writer:FormattedWriter, fun:IRFunction, nameOverride:String = null):void {
-			writer.write(getTypeName(fun.returnType.resolution, true));
+			writer.write(getTypeName(fun.loc, fun.returnType.resolution, true));
 			writer.write(" ");
 			if ( nameOverride ){
 				writer.write(nameOverride);
@@ -769,7 +771,7 @@ package com.meduzik.jf.codegen {
 			writer.write(")");
 		}
 		
-		private function getTypeName(type:IRType, storage:Boolean = false):String {
+		private function getTypeName(loc:SrcLoc, type:IRType, storage:Boolean = false):String {
 			if ( !type ){
 				return "jf_unit";
 			}else{
@@ -796,7 +798,7 @@ package com.meduzik.jf.codegen {
 					}break;
 					}
 				}else if ( type is IRTypeArray ){
-					return getTypeName(IRTypeArray(type).type, storage) + "*";
+					return getTypeName(loc, IRTypeArray(type).type, storage) + "*";
 				}else if ( type is IRRefType ){
 					var refType:IRRefType = type as IRRefType;
 					
@@ -811,7 +813,7 @@ package com.meduzik.jf.codegen {
 							forwardDeclareADT(adt);
 							return (mangleADTName(adt) + "_p");
 						}else{
-							throw new Error("doesn't refer a type");
+							return error(loc, ref.symbol.name + " doesn't refer a type");
 						}
 					}else{
 						throw new Error("unresolved id");

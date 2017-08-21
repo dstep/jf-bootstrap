@@ -1,0 +1,3 @@
+function LLVMContextCreate():pointer import "LLVMContextCreate"
+function LLVMModuleCreateWithNameInContext(name:string, content:pointer):pointer import "LLVMModuleCreateWithNameInContext"
+function LLVMPrintModuleToString(module:pointer):string import "LLVMPrintModuleToString"

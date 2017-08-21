@@ -13,7 +13,6 @@ package com.meduzik.jf.compiler {
 		}
 		
 		public function parse(ctx:CompilerContext, file:File):void {
-			Diagnostic.Info("Reading project file", file.nativePath);
 			var projectInfo:Object = JSON.parse(ReadFileContents(file));
 			
 			var assemblies:Object = projectInfo.assemblies as Object;

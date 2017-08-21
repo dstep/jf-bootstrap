@@ -5,6 +5,8 @@ end
 
 function Write(message:string) import "jfprelude_Write"
 
+function DecodeStr(s:string):string import "jfprelude_DecodeStr"
+function StrToInt(x:string):i32 import "jfprelude_StrToInt"
 function IntToStr(x:i32):string import "jfprelude_IntToStr"
 function CharCode(str:string):i32
 	return CharAt(str, 0)
@@ -23,7 +25,8 @@ adt FileData
 	Data(ptr:pointer, size:i32)
 end
 function ReadFile(path:string):FileData import "jfprelude_ReadFile"
-
+function WriteFile(path:string, content:string) import "jfprelude_WriteFile"
+function RemoveFile(path:string) import "jfprelude_RemoveFile"
 
 adt DirectoryData
 	field files:string[]	
