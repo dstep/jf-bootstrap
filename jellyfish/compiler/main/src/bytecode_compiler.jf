@@ -211,6 +211,7 @@ function BCInjectParameters(bc:BCCompiler, fun:IRFunctionDecl, frame:FunctionFra
 			var var_ = Variable.Parameter(param)
 			var_.type = param.type.type
 			var_.dbg = DbgLocCreate(bc, param.loc)
+			FunctionFrameAddVar(frame, var_)
 			params = tail
 			
 			BCCompilerAddScopeRef(bc, param.name, LocalRef.Variable(var_))
@@ -302,6 +303,31 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 		case other
 			BCCompilerError(bc, ast.loc, "reference type is not implemented")
 		end
+	case If(cond, then_, else_)
+		var val = BCCompileExprAs(bc, cond, IRType.Prim(IRPrimType.Bool))
+		
+		var thenBlock = BasicBlockCreate(bc.frame)
+		var elseBlock = BasicBlockCreate(bc.frame)
+		var joinBlock = BasicBlockCreate(bc.frame)
+		
+		BCBuilderCondJump(bc.builder, val, thenBlock, elseBlock)
+		
+		BCBuilderSetInsertPoint(bc.builder, thenBlock)		
+		BCCompilerEnterScope(bc)
+		BCCompileStmt(bc, then_)
+		BCCompilerLeaveScope(bc)
+		BCBuilderJump(bc.builder, joinBlock)
+		
+		BCBuilderSetInsertPoint(bc.builder, elseBlock)
+		BCCompilerEnterScope(bc)
+		match else_
+		case Just(stmt)
+			BCCompileStmt(bc, stmt)
+		end
+		BCCompilerLeaveScope(bc)
+		BCBuilderJump(bc.builder, joinBlock)
+		
+		BCBuilderSetInsertPoint(bc.builder, joinBlock)
 	case Ret(m_expr)
 		var value:ValueRef
 		match m_expr

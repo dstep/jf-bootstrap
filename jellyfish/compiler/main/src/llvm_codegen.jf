@@ -5,6 +5,16 @@ import main.llvm
 import main.ast
 import main.prelude
 
+adt ParamToValue
+	Nil
+	Cons(param:IRParam, value:pointer, tail:ParamToValue)
+end
+
+adt VarToValue
+	Nil
+	Cons(var_:Variable, value:pointer, tail:VarToValue)
+end
+
 adt LLVMCodegen
 	New
 	
@@ -12,6 +22,11 @@ adt LLVMCodegen
 	field file:IRSourceFile
 	
 	field module:pointer
+	field llvmFun:pointer
+	field builder:pointer
+	
+	field params:ParamToValue
+	field vars:VarToValue
 end
 
 global llvm:pointer = LLVMContextCreate()
@@ -109,9 +124,343 @@ function LLVMCodegenSymbol(codegen:LLVMCodegen, symbol:IRSymbol)
 	end
 end
 
+function MangleUnitName(unit_:IRCompilationUnit):string
+	return unit_.name
+end
+
+function MangleGlobalName(global_:IRGlobalDecl):string
+	return MangleUnitName(global_.symbol.owner.unit_) + ".g." + global_.symbol.name
+end
+
+function MangleFunctionName(fun:IRFunctionDecl):string
+	return MangleUnitName(fun.symbol.owner.unit_) + ".fn." + fun.symbol.name
+end
+
 function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
+	LLVMCodegenGlobalDecl(codegen, global_)
+end
+
+function LLVMCodegenGlobalDecl(codegen:LLVMCodegen, global_:IRGlobalDecl):pointer
+	var gval:pointer
+	var name = MangleGlobalName(global_)
+	
+	gval = LLVMGetNamedGlobal(codegen.module, name)
+	if gval == Null() then
+		var type = LLVMCodegenType(codegen, global_.type.loc, global_.type.type)		
+		gval = LLVMAddGlobal(codegen.module, type, name)
+	end
+		
+	return gval
+end
+
+function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
+	match type
+	case Ref(ref)
+		LLVMCodegenError(codegen, loc, "ref types must not appear in the codegen")
+	case Prim(prim)
+		match prim
+		case Unit return LLVMVoidTypeInContext(llvm)
+		case I32 return LLVMInt32TypeInContext(llvm)
+		case String return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
+		case Pointer return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
+		case Bool return LLVMInt1TypeInContext(llvm)
+		case other LLVMCodegenError(codegen, loc, "prim type not implemented")
+		end
+	case ADT(adt_)
+		LLVMCodegenError(codegen, loc, "adt type not implemented")
+	case ADTMetaclass(decl)
+		LLVMCodegenError(codegen, loc, "meta types must not appear in the codegen")
+	case ArrayUnsized(elementType)
+		var elTy = LLVMCodegenType(codegen, loc, elementType)
+		return LLVMPointerType(elTy, 0)
+	case ArraySized(elementType, size)
+		LLVMCodegenError(codegen, loc, "sized array type should not appear in a compiled bytecode")
+	case other
+		LLVMCodegenError(codegen, loc, "type not implemented")
+	end
+end
+
+function count_params(params:IRParamList):i32
+	var i = 0
+	while true do
+		match params
+		case Nil return i
+		case Cons(param, tail)
+			params = tail
+			i = i + 1
+		end
+	end
+end
+
+function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointer
+	var paramCount = count_params(fun.params)
+	var params:pointer[] = new pointer[paramCount]
+	
+	var i = 0
+	var paramList = fun.params
+	while i < paramCount do
+		match paramList
+		case Cons(param, tail)
+			paramList = tail
+			params[i] = LLVMCodegenType(codegen, param.type.loc, param.type.type)
+		end
+		i = i + 1
+	end
+	
+	var retTy = LLVMCodegenType(codegen, fun.retTy.loc, fun.retTy.type)
+	
+	var funTy = LLVMFunctionType(retTy, params, paramCount, false)
+	
+	var llvmFun = LLVMAddFunction(codegen.module, MangleFunctionName(fun), funTy)
+	
+	i = 0
+	paramList = fun.params
+	while i < paramCount do
+		match paramList
+		case Cons(param, tail)
+			paramList = tail
+			var llvmParam = LLVMGetParam(llvmFun, i)
+			LLVMSetValueName(llvmParam, param.name)			
+		end
+		i = i + 1
+	end
+	
+	return llvmFun
 end
 
 function LLVMCodegenFunction(codegen:LLVMCodegen, fun:IRFunctionDecl)
+	var llvmFun = LLVMCodegenFunctionDecl(codegen, fun)
+	
+	LLVMCodegenClearState(codegen)
+	codegen.llvmFun = llvmFun
+	LLVMCodegenCaptureParams(codegen, fun, llvmFun)
+	
+	var builder = LLVMCreateBuilderInContext(llvm)
+	var bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
+	LLVMPositionBuilderAtEnd(builder, bb)
+	codegen.builder = builder
+	
+	match fun.body
+	case Block(block)
+		LLVMCodegenFunctionFrame(codegen, block.frame)
+	case FFIImport(text)
+		LLVMCodegenError(codegen, fun.body.loc, "ffi not implemented")
+	end
 end
+
+function LLVMCodegenClearState(codegen:LLVMCodegen)
+	codegen.vars = VarToValue.Nil
+	codegen.params = ParamToValue.Nil
+end
+
+function LLVMCodegenCaptureParams(codegen:LLVMCodegen, fun:IRFunctionDecl, llvmFun:pointer)
+	var i = 0
+	var params = fun.params
+	while true do
+		match params
+		case Nil return
+		case Cons(param, tail)
+			params = tail
+			
+			var llvmParam = LLVMGetParam(llvmFun, i)
+			codegen.params = ParamToValue.Cons(param, llvmParam, codegen.params)
+		end
+		i = i + 1
+	end
+end
+
+function LLVMCodegenFunctionFrame(codegen:LLVMCodegen, frame:FunctionFrame)
+	LLVMCodegenVariables(codegen, frame)
+	LLVMCodegenBakeArguments(codegen, frame)
+	
+	LLVMCodegenPreapreBasicBlocks(codegen, frame.blocks)
+	
+	LLVMBuildBr(codegen.builder, frame.entry.llvmRef)
+	
+	LLMVCodegenBasicBlocks(codegen, frame.blocks)
+end
+
+function GetDbgLoc(dbg:DebugLoc):SrcLoc
+	match dbg
+	case At(file, loc)
+		return loc
+	case None
+		return SrcLoc.At(0, 0)
+	end
+end
+
+function GetVariableName(var_:Variable):string
+	match var_
+	case Var(name) return name
+	case Parameter(param) return "bake." + param.name
+	case other return ""
+	end
+end
+
+function LLVMCodegenGetValue(codegen:LLVMCodegen, value:ValueRef):pointer
+	match value
+	case Instr(instr)
+		return instr.llvmRef
+	case ConstNum(num, type)
+		return LLVMConstInt_wrap(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), num, true)
+	case ConstString(str, ty)
+		var initializer = LLVMConstStringInContext(llvm, str, StringLength(str), false)
+		var globalConstant = LLVMAddGlobal(codegen.module, LLVMTypeOf(initializer), "")
+		LLVMSetLinkage(globalConstant, LLVMPrivateLinkage())
+		LLVMSetInitializer(globalConstant, initializer)
+		return LLVMConstBitCast(globalConstant, LLVMPointerType(LLVMInt8TypeInContext(llvm), 0))
+	case other
+		WriteLn("ValueRef not implemented")
+		Exit(1)
+	end
+end
+
+function IsVoidType(type:IRType):bool
+	match type
+	case Prim(prim)
+		match prim
+		case Unit return true
+		end
+	end
+	return false
+end
+
+function LLVMCodegenPreapreBasicBlocks(codegen:LLVMCodegen, blocks:BasicBlockList)
+	while true do
+		match blocks
+		case Nil return
+		case Cons(block, tail)
+			blocks = tail
+			
+			var bb = LLVMAppendBasicBlockInContext(llvm, codegen.llvmFun, "")
+			block.llvmRef = bb
+		end
+	end
+end
+
+function LLMVCodegenBasicBlocks(codegen:LLVMCodegen, blocks:BasicBlockList)
+	while true do
+		match blocks
+		case Nil return
+		case Cons(block, tail)
+			blocks = tail
+			
+			LLMVCodegenBasicBlock(codegen, block)
+		end
+	end
+end
+
+
+function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
+	LLVMPositionBuilderAtEnd(codegen.builder, bb.llvmRef)
+
+	var i = 0
+	while i < bb.size do
+		var instr = bb.instructions[i]
+		
+		match instr
+		case WriteVariable(var_, value)
+			var alloca = LLVMCodegenGetVariableStorage(codegen, var_)
+			var value = LLVMCodegenGetValue(codegen, value)
+			
+			LLVMBuildStore(codegen.builder, value, alloca)
+		case ReadVariable(var_)
+			var alloca = LLVMCodegenGetVariableStorage(codegen, var_)
+			
+			var val = LLVMBuildLoad(codegen.builder, alloca, "")
+			instr.llvmRef = val
+		case ReadGlobal(global_)
+			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
+			var val = LLVMBuildLoad(codegen.builder, globalVar, "")
+			instr.llvmRef = val
+		case WriteGlobal(global_, value)
+			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
+			LLVMBuildStore(codegen.builder, globalVar, LLVMCodegenGetValue(codegen, value))
+		case Unreachable
+			LLVMBuildUnreachable(codegen.builder)
+		case Return(value)
+			var type = ValueRefGetType(value)
+			if IsVoidType(type) then
+				LLVMBuildRetVoid(codegen.builder)
+			else
+				var value = LLVMCodegenGetValue(codegen, value)
+				
+				LLVMBuildRet(codegen.builder, value)
+			end
+		case Jump(bb_ref)
+			LLVMBuildBr(codegen.builder, bb_ref.llvmRef)
+		case CondJump(value, bbTrue, bbFalse)
+			var cond = LLVMCodegenGetValue(codegen, value)
+			LLVMBuildCondBr(codegen.builder, cond, bbTrue.llvmRef, bbFalse.llvmRef)
+		case other
+			LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "instruction not implemented")
+		end
+		
+		i = i + 1
+	end
+end
+
+function LLVMCodegenGetArgumentValue(codegen:LLVMCodegen, param:IRParam):pointer
+	var params = codegen.params
+	while true do
+		match params
+		case Nil LLVMCodegenError(codegen, param.loc, "invalid codegen: no value for param")
+		case Cons(param1, value, tail)
+			params = tail
+			if param1 == param then
+				return value
+			end
+		end
+	end
+end
+
+function LLVMCodegenGetVariableStorage(codegen:LLVMCodegen, var_:Variable):pointer
+	var vars = codegen.vars
+	while true do
+		match vars
+		case Nil LLVMCodegenError(codegen, GetDbgLoc(var_.dbg), "invalid codegen: no value for variable")
+		case Cons(var_1, value, tail)
+			vars = tail
+			if var_1 == var_ then
+				return value
+			end
+		end
+	end
+end
+
+
+function LLVMCodegenBakeArguments(codegen:LLVMCodegen, frame:FunctionFrame)
+	var vars = frame.vars
+	while true do
+		match vars
+		case Nil return
+		case Cons(var_, tail)
+			vars = tail
+			match var_
+			case Parameter(param)
+				var arg = LLVMCodegenGetArgumentValue(codegen, param)
+				var alloca = LLVMCodegenGetVariableStorage(codegen, var_)
+				LLVMBuildStore(codegen.builder, arg, alloca)
+			end			
+		end
+	end
+	
+end
+
+
+function LLVMCodegenVariables(codegen:LLVMCodegen, frame:FunctionFrame)
+	var vars = frame.vars
+	while true do
+		match vars
+		case Nil return
+		case Cons(var_, tail)
+			vars = tail
+			var varTy = LLVMCodegenType(codegen, GetDbgLoc(var_.dbg), var_.type)
+			var alloca = LLVMBuildAlloca(codegen.builder, varTy, GetVariableName(var_))
+
+			codegen.vars = VarToValue.Cons(var_, alloca, codegen.vars)
+		end
+	end	
+end
+
 

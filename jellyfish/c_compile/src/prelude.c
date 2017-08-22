@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "dirent.h"
+#include <llvm-c/Core.h>
 
 jf_i32 jfprelude_LoadByte(jf_pointer ptr, jf_i32 offset){
 	return ((unsigned char*)ptr)[offset];
@@ -156,4 +157,16 @@ jf_string jfprelude_DecodeStr(jf_string s){
 	jf_string ret = jf_make_string(buffer);
 	free(buffer);
 	return ret;
+}
+
+jf_pointer jfprelude_Null(){
+	return NULL;
+}
+
+jf_pointer LLVMConstInt_wrap(jf_pointer type, jf_i32 n, jf_bool signExtended){
+	return LLVMConstInt(type, n, signExtended);
+}
+
+jf_i32 jfprelude_LLVMPrivateLinkage(){
+	return LLVMPrivateLinkage;
 }

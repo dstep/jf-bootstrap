@@ -27,6 +27,7 @@ end
 function ReadFile(path:string):FileData import "jfprelude_ReadFile"
 function WriteFile(path:string, content:string) import "jfprelude_WriteFile"
 function RemoveFile(path:string) import "jfprelude_RemoveFile"
+function Null():pointer import "jfprelude_Null"
 
 adt DirectoryData
 	field files:string[]	

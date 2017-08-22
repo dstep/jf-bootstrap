@@ -55,3 +55,11 @@ end
 function BCBuilderReturn(builder:BCBuilder, val:ValueRef)
 	BCBuilderInsert(builder, Instruction.Return(val), IRType.Prim(IRPrimType.Unit))
 end
+
+function BCBuilderJump(builder:BCBuilder, bb:BasicBlock)
+	BCBuilderInsert(builder, Instruction.Jump(bb), IRType.Prim(IRPrimType.Unit))
+end
+
+function BCBuilderCondJump(builder:BCBuilder, cond:ValueRef, then_:BasicBlock, else_:BasicBlock)
+	BCBuilderInsert(builder, Instruction.CondJump(cond, then_, else_), IRType.Prim(IRPrimType.Unit))
+end

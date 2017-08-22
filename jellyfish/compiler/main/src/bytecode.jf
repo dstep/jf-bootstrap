@@ -61,19 +61,28 @@ adt BasicBlock
 	field instructions:Instruction[]
 	field size:i32
 	field capacity:i32
+	
+	field llvmRef:pointer
 end
+
 
 adt Instruction
 	WriteVariable(var_:Variable, value:ValueRef)
 	ReadVariable(var_:Variable) 
-	CallGlobal(global_:IRGlobalDecl, args:ValueRefList)
+	CallGlobal(fun:IRFunctionDecl, args:ValueRefList)
 	ReadGlobal(global_:IRGlobalDecl)
 	WriteGlobal(global_:IRGlobalDecl, value:ValueRef)
+	
+	Unreachable
+	Jump(target:BasicBlock)
+	CondJump(val:ValueRef, ifTrue:BasicBlock, ifFalse:BasicBlock)
 	Return (ref:ValueRef)
 	
 	field dbg:DebugLoc
 	field type:IRType
 	field value:ValueRef
+	
+	field llvmRef:pointer
 end
 
 adt ValueRefList

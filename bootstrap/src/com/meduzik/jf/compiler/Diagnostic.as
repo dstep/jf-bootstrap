@@ -1,5 +1,6 @@
 package com.meduzik.jf.compiler {
 	import com.meduzik.jf.ast.SrcLoc;
+	import flash.desktop.NativeApplication;
 	import flash.display.Sprite;
 	import flash.events.Event;
 	import flash.text.TextField;
@@ -51,6 +52,9 @@ package com.meduzik.jf.compiler {
 		private function report(file:String, loc:SrcLoc, message:String, ...args):void {
 			tf.appendText(file + "(" + loc.toString() + "): " + message + " " + args.map(encodeArg).join(' ') + "\n");
 			scroll();
+			if ( !err ){
+				NativeApplication.nativeApplication.openedWindows[0].visible = true;
+			}
 			err = true;
 		}
 		

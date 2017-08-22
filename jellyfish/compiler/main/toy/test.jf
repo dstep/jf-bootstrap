@@ -1,12 +1,10 @@
-global t:i32 = 0
+global X:i32 = 3
 
-function foo(x:i32, y:string):i32
-	var a:i32 = 1
-	
-	x = 2
-	
-	t = 1
-	
-	return t
+function foo(b:bool):i32
+	if b then
+		return X
+	else
+		return 7
+	end
 end
 
