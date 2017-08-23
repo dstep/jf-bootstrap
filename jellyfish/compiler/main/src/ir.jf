@@ -153,6 +153,7 @@ end
 
 adt IRPrimType
 	Unit
+	Undef
 	I32
 	String
 	Pointer

@@ -822,6 +822,8 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 			return ValueRef.ConstBool(true, IRType.Prim(IRPrimType.Bool)) 
 		elif id == "false" then
 			return ValueRef.ConstBool(false, IRType.Prim(IRPrimType.Bool)) 
+		elif id == "undef" then
+			return ValueRef.Undef(IRType.Prim(IRPrimType.Undef)) 
 		end
 		
 		var ref = BCCompilerResolveRef(bc, ast.loc, id)
@@ -980,13 +982,13 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 			end
 			
 			BCBuilderSetInsertPoint(bc.builder, secondBlock)
-			var rExpr = BCCompileExprAs(bc, lhs, boolTy)
+			var rExpr = BCCompileExprAs(bc, rhs, boolTy)
 			BCBuilderJump(bc.builder, joinBlock)
 			
 			BCBuilderSetInsertPoint(bc.builder, joinBlock)
 			
 			var phi0 = PHIList.Nil		
-			var phi1 = PHIList.Cons(currentBlock, ValueRef.ConstBool(opId == 4, boolTy), phi0)
+			var phi1 = PHIList.Cons(currentBlock, ValueRef.ConstBool(opId == 5, boolTy), phi0)
 			var phi2 = PHIList.Cons(secondBlock, rExpr, phi1)
 			
 			return BCBuilderPHI(bc.builder, boolTy, phi2)
@@ -1081,6 +1083,9 @@ function BCCompileCoerce(bc:BCCompiler, loc:SrcLoc, val:ValueRef, targetType:IRT
 	case None 
 		BCCompilerError(bc, loc, "can't coerce type")
 	case ID return val
+	case FromUndef 
+		BCBuilderUnreachable(bc.builder)
+		return ValueRef.Undef(targetType)
 	case other BCCompilerError(bc, loc, "coercion not implemented")
 	end
 end
@@ -1094,6 +1099,14 @@ function BCCompileUnifyTypes(bc:BCCompiler, loc:SrcLoc, leftTy:IRType, rightTy:I
 end
 
 function BCCompileFindCoerce(bc:BCCompiler, actualType:IRType, targetType:IRType):Coerce
+	match actualType
+	case Prim(ty1)
+		match ty1
+		case Undef
+			return Coerce.FromUndef
+		end
+	end
+	
 	match actualType
 	case Prim(ty1)
 		match targetType

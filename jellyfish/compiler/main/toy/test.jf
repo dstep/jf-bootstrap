@@ -1,126 +1,307 @@
+function Rand():i32 import "rand"
 function Trace(message:string) import "puts"
 function IntToStr(x:i32):string import "jfprelude_IntToStr"
+function StrToInt(x:string):i32 import "jfprelude_StrToInt"
+function ReadLn(prompt:string):string import "jfprelude_ReadLn"
 
-adt Expr
-	Cons(x:i32)
-	BinOp(lhs:Expr, op:Operator, rhs:Expr)
-	If(cond:Expr, on_true:Expr, on_false:Expr)
+
+adt Player
+	X
+	O
 end
 
-adt Operator
-	Plus
-	Minus
-	Divide
-	Multiply
-	Less
+adt Winner
+	Player(player:Player)
+	Draw
+	StillPlaying
 end
 
-adt ExprTest
-	Test(expr:Expr, result:i32)
+adt CellContent
+	Empty
+	Filled(player:Player)
 end
 
-function print_op(op:Operator):string
-	match op 
-	case Plus return "+"
-	case Minus return "-"
-	case Divide return "/"
-	case Multiply return "*"
-	case Less return "<"
+adt Cell
+	New
+	
+	field content:CellContent
+end
+
+adt CellList
+	Nil
+	Cons(cell:Cell, tail:CellList)
+end
+
+function PlayerToString(player:Player):string
+	match player 
+	case X
+		return "X"
+	case O
+		return "O"
 	end
 end
 
-function print_expr(e:Expr):string
-	match e
-	case Cons(x)
-		return IntToStr(x)
-	case BinOp(lhs, op, rhs)
-		return "(" + print_expr(lhs) + " " + print_op(op) + " " + print_expr(rhs) + ")"
-	case If(cond, on_true, on_false)
-		return "(" + print_expr(cond) + "?" + print_expr(on_true) + ":" + print_expr(on_false) + ")"
+function createEmptyGrid():CellList
+	var grid:CellList = CellList.Nil()
+	
+	var i = 9
+	while i > 0 do
+		var cell:Cell = Cell.New()
+		cell.content = CellContent.Empty()
+		grid = CellList.Cons(cell, grid)
+		i = i - 1
 	end
+	
+	return grid
 end
 
-function eval(e:Expr):i32
-	match e
-	case Cons(x)
-		return x
-	case BinOp(lhs, op, rhs)
-		var l = eval(lhs)
-		var r = eval(rhs)
-		match op 
-		case Plus return l + r
-		case Minus return l - r
-		case Divide return l / r
-		case Multiply return l * r
-		case Less
-			if l < r then
-				return 1
-			else
-				return 0
+function drawGrid(grid:CellList)
+	var x = 0
+	var y = 0
+	
+	while y < 3 do
+		x = 0		
+		var line = ""
+		while x < 3 do
+			match grid 
+			case Cons(cell, tail)
+				match cell.content
+				case Empty
+					line = line + " "
+				case Filled(player)
+					match player
+					case X
+						line = line + "X"
+					case O
+						line = line + "O"
+					end
+				end
+				grid = tail
 			end
+			if x < 2 then
+				line = line + "|"
+			end
+			x = x + 1
 		end
-	case If(cond, on_true, on_false)
-		var c = eval(cond)
-		if c <> 0 then
-			return eval(on_true)
-		else
-			return eval(on_false)
+		Trace(line)
+		if y < 2 then
+			Trace("-+-+-")
+		end
+		y = y + 1
+	end
+end
+
+function skip(grid:CellList, n:i32):CellList
+	while n > 0 do
+		match grid
+		case Cons(cell, tail)
+			grid = tail
+		end
+		n = n - 1
+	end
+	return grid
+end
+
+function getCell(grid:CellList, n:i32):Cell
+	grid = skip(grid, n)
+	match grid
+	case Cons(cell, tail)
+		return cell
+	case other return undef
+	end
+end
+
+function put(grid:CellList, n:i32, player:Player):bool
+	var cell = getCell(grid, n)
+	
+	match cell.content
+	case Empty
+		cell.content = CellContent.Filled(player)
+		return true
+	case other
+		return false
+	end
+end
+
+function translate_coord(x:i32):i32
+	if x == 7 then
+		return 0
+	elif x == 8 then
+		return 1
+	elif x == 9 then
+		return 2
+	elif x == 4 then
+		return 3
+	elif x == 5 then
+		return 4
+	elif x == 6 then
+		return 5
+	elif x == 1 then
+		return 6
+	elif x == 2 then
+		return 7
+	elif x == 3 then
+		return 8
+	else
+		return 0-1
+	end
+end
+
+function translate_magic(x:i32):i32
+	if x == 8 then
+		return 0
+	elif x == 1 then
+		return 1
+	elif x == 6 then
+		return 2
+	elif x == 3 then
+		return 3
+	elif x == 5 then
+		return 4
+	elif x == 7 then
+		return 5
+	elif x == 4 then
+		return 6
+	elif x == 9 then
+		return 7
+	elif x == 2 then
+		return 8
+	else
+		return 0-1
+	end
+end
+
+function getValue(c:CellContent):i32
+	match c 
+	case Empty
+		return 0
+	case Filled(p)
+		match p
+		case X
+			return 1
+		case O
+			return 2
 		end
 	end
 end
 
-function test_case_1():ExprTest
-	return ExprTest.Test(Expr.Cons(1), 1)
+function isSame(c1:CellContent, c2:CellContent):bool
+	var c1val = getValue(c1)
+	var c2val = getValue(c2)
+	
+	return c1val == c2val
 end
 
-function test_case_2():ExprTest
-	return ExprTest.Test(Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3)), 5)
-end
-
-function test_case_3():ExprTest
-	return ExprTest.Test(
-		Expr.If(
-			Expr.BinOp(
-				Expr.Cons(7),
-				Operator.Less(),
-				Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3))
-			),
-			Expr.Cons(17),
-			Expr.Cons(42)
-		), 42)
-end
-
-function test_case_4():ExprTest
-	return ExprTest.Test(
-		Expr.If(
-			Expr.BinOp(
-				Expr.Cons(3),
-				Operator.Less(),
-				Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3))
-			),
-			Expr.Cons(17),
-			Expr.Cons(42)
-		), 17)
-end
-
-
-
-function run_test(test:ExprTest)
-	match test
-	case Test(expr, expected)
-		Trace("Running test " + print_expr(expr))
-		var actual = eval(expr)
-		if actual == expected then
-			Trace("OK, got " + IntToStr(actual))
-		else
-			Trace("FAILED! Expected " + IntToStr(expected) + ", got " + IntToStr(actual))
-		end
+function checkLine(grid:CellList, a:i32, b:i32, c:i32):CellContent
+	var cellA = getCell(grid, translate_magic(a)).content
+	var cellB = getCell(grid, translate_magic(b)).content
+	var cellC = getCell(grid, translate_magic(c)).content
+	
+	if isSame(cellA, cellB) and isSame(cellB, cellC) then
+		return cellA
+	else
+		return CellContent.Empty()
 	end
+end
+	
+
+function checkWinner(grid:CellList):Winner
+	var a = 1
+	while a < 10 do
+		var b = a + 1
+		while b < 10 do
+			var c = b + 1
+			while c < 10 do
+				if a + b + c == 15 then
+					match checkLine(grid, a, b, c) 
+					case Filled(player)						
+						return Winner.Player(player)
+					end				
+				end
+				c = c + 1
+			end
+			b = b + 1
+		end
+		a = a + 1
+	end
+	
+	var i = 0
+	while i < 9 do
+		match getCell(grid, i).content
+		case Empty
+			return Winner.StillPlaying()
+		end
+		i = i + 1
+	end
+	
+	return Winner.Draw()
+end
+
+function tryPlace(grid:CellList, n:i32, player:Player):bool
+	if n < 0 or n > 8 then
+		return false
+	end
+	
+	if put(grid, n, player) then
+		drawGrid(grid)
+		return true
+	else
+		return false
+	end
+end
+
+function checkGameOver(grid:CellList):bool
+	match checkWinner(grid)
+	case Draw
+		Trace("It's a draw")
+		return true
+	case Player(winner)
+		Trace("The winner is " + PlayerToString(winner))
+		return true
+	end
+	return false
+end
+
+function ai(grid:CellList, playerPlays:Player, aiPlays:Player):i32
+	
+	var i:i32 = 0
+	while i < 9 do
+		if getValue(getCell(grid, i).content) == 0 then
+			return i
+		end
+		i = i + 1
+	end
+	
+	return 0-1
 end
 
 function run()
-	run_test(test_case_1())
-	run_test(test_case_2())
-	run_test(test_case_3())
-	run_test(test_case_4())
+	var grid = createEmptyGrid()
+	drawGrid(grid)
+	
+	var playerPlays = Player.X()
+	var aiPlays = Player.O()
+	
+	var playing = true	
+	while playing do
+		Trace("You are playing as " + PlayerToString(playerPlays))
+		
+		var i = translate_coord(StrToInt(ReadLn("You turn? ")))
+		if tryPlace(grid, i, playerPlays) then
+			if checkGameOver(grid) then
+				playing = false
+			else
+				var x = ai(grid, playerPlays, aiPlays)
+				
+				if tryPlace(grid, x, aiPlays) then
+					if checkGameOver(grid) then
+						playing = false
+					end
+				else
+					Trace("Sorry, this AI is too dumb to make a move.")
+					playing = false
+				end
+			end
+		end
+	end
 end

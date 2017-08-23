@@ -8,6 +8,7 @@ adt ValueRef
 	ConstString(val:string, type:IRType)
 	ConstBool(val:bool, type:IRType)
 	ConstUnit
+	Undef(type:IRType)
 end
 
 adt MaybeValueRef
@@ -158,6 +159,7 @@ end
 
 adt Coerce
 	None
+	FromUndef
 	ID
 end
 
@@ -200,6 +202,8 @@ function ValueRefGetType(value:ValueRef):IRType
 	case ConstUnit
 		return IRType.Prim(IRPrimType.Unit)
 	case ConstBool(b, ty)
+		return ty
+	case Undef(ty)
 		return ty
 	case other
 		WriteLn("value ref not implemented")
