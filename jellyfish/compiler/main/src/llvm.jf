@@ -74,6 +74,8 @@ function LLVMBuildBitCast(builder:pointer, value:pointer, type:pointer, name:str
 
 function LLVMBuildInBoundsGEP(builder:pointer, value:pointer, indices:pointer[], numIndices:i32, name:string):pointer import "LLVMBuildInBoundsGEP"
 
+function LLVMBuildSwitch(builder:pointer, val:pointer, def:pointer, numCases:i32):pointer import "LLVMBuildSwitch"
+function LLVMAddCase(switch:pointer, val:pointer, bb:pointer) import "LLVMAddCase"
 -- Values
 function LLVMTypeOf(value:pointer):pointer import "LLVMTypeOf"
 

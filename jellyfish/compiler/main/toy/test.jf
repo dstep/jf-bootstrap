@@ -1,9 +1,126 @@
 function Trace(message:string) import "puts"
-function IntToStr(x:i32):string import "IntToStr"
+function IntToStr(x:i32):string import "jfprelude_IntToStr"
 
-global G:i32 = 42
-
-function foo():i32
-	return G
+adt Expr
+	Cons(x:i32)
+	BinOp(lhs:Expr, op:Operator, rhs:Expr)
+	If(cond:Expr, on_true:Expr, on_false:Expr)
 end
 
+adt Operator
+	Plus
+	Minus
+	Divide
+	Multiply
+	Less
+end
+
+adt ExprTest
+	Test(expr:Expr, result:i32)
+end
+
+function print_op(op:Operator):string
+	match op 
+	case Plus return "+"
+	case Minus return "-"
+	case Divide return "/"
+	case Multiply return "*"
+	case Less return "<"
+	end
+end
+
+function print_expr(e:Expr):string
+	match e
+	case Cons(x)
+		return IntToStr(x)
+	case BinOp(lhs, op, rhs)
+		return "(" + print_expr(lhs) + " " + print_op(op) + " " + print_expr(rhs) + ")"
+	case If(cond, on_true, on_false)
+		return "(" + print_expr(cond) + "?" + print_expr(on_true) + ":" + print_expr(on_false) + ")"
+	end
+end
+
+function eval(e:Expr):i32
+	match e
+	case Cons(x)
+		return x
+	case BinOp(lhs, op, rhs)
+		var l = eval(lhs)
+		var r = eval(rhs)
+		match op 
+		case Plus return l + r
+		case Minus return l - r
+		case Divide return l / r
+		case Multiply return l * r
+		case Less
+			if l < r then
+				return 1
+			else
+				return 0
+			end
+		end
+	case If(cond, on_true, on_false)
+		var c = eval(cond)
+		if c <> 0 then
+			return eval(on_true)
+		else
+			return eval(on_false)
+		end
+	end
+end
+
+function test_case_1():ExprTest
+	return ExprTest.Test(Expr.Cons(1), 1)
+end
+
+function test_case_2():ExprTest
+	return ExprTest.Test(Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3)), 5)
+end
+
+function test_case_3():ExprTest
+	return ExprTest.Test(
+		Expr.If(
+			Expr.BinOp(
+				Expr.Cons(7),
+				Operator.Less(),
+				Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3))
+			),
+			Expr.Cons(17),
+			Expr.Cons(42)
+		), 42)
+end
+
+function test_case_4():ExprTest
+	return ExprTest.Test(
+		Expr.If(
+			Expr.BinOp(
+				Expr.Cons(3),
+				Operator.Less(),
+				Expr.BinOp(Expr.Cons(2), Operator.Plus(), Expr.Cons(3))
+			),
+			Expr.Cons(17),
+			Expr.Cons(42)
+		), 17)
+end
+
+
+
+function run_test(test:ExprTest)
+	match test
+	case Test(expr, expected)
+		Trace("Running test " + print_expr(expr))
+		var actual = eval(expr)
+		if actual == expected then
+			Trace("OK, got " + IntToStr(actual))
+		else
+			Trace("FAILED! Expected " + IntToStr(expected) + ", got " + IntToStr(actual))
+		end
+	end
+end
+
+function run()
+	run_test(test_case_1())
+	run_test(test_case_2())
+	run_test(test_case_3())
+	run_test(test_case_4())
+end

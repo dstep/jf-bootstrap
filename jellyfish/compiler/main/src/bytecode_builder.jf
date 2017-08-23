@@ -80,6 +80,12 @@ function BCBuilderCallConstructor(builder:BCBuilder, cons:IRADTCons, args:ValueR
 	return ins.value
 end
 
+function BCBuilderADTExtract(builder:BCBuilder, val:ValueRef, cons:IRADTCons, param:IRParam):ValueRef
+	var ins = Instruction.ADTExtract(val, cons, param)
+	BCBuilderInsert(builder, ins, param.type.type)
+	return ins.value
+end
+
 function BCBuilderPHI(builder:BCBuilder, type:IRType, phi:PHIList):ValueRef
 	var ins = Instruction.PHI(phi)
 	BCBuilderInsert(builder, ins, type)
@@ -110,3 +116,6 @@ function BCBuilderArrayRead(builder:BCBuilder, array:ValueRef, idx:ValueRef, typ
 	return ins.value
 end
 
+function BCBuilderADTJump(builder:BCBuilder, adt_:IRADTDecl, val:ValueRef, branches:ADTJumpCase, def:BasicBlock)
+	BCBuilderInsert(builder, Instruction.ADTJump(val, adt_, branches, def), IRType.Prim(IRPrimType.Unit))
+end

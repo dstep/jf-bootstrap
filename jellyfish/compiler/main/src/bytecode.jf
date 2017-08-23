@@ -46,13 +46,11 @@ adt FunctionFrame
 	field blocks:BasicBlockList
 end
 
-adt TemporaryContext
-end
 
 adt Variable
 	Parameter(param:IRParam)
 	Var(name:string)
-	Temporary(context:TemporaryContext)
+	Temporary(name:string)
 
 	field type:IRType
 	field dbg:DebugLoc
@@ -110,6 +108,11 @@ adt Intrinsic
 	NewArray(elTy:IRType)
 end
 
+adt ADTJumpCase
+	Nil
+	Cons(cons:IRADTCons, bb:BasicBlock, tail:ADTJumpCase)
+end
+
 adt Instruction
 	WriteVariable(var_:Variable, value:ValueRef)
 	ReadVariable(var_:Variable)
@@ -123,12 +126,14 @@ adt Instruction
 	ArrayRead(array:ValueRef, idx:ValueRef)
 	ArrayWrite(array:ValueRef, idx:ValueRef, value:ValueRef)
 	
+	ADTExtract(owner:ValueRef, cons:IRADTCons, param:IRParam)	
 	ReadADTField(owner:ValueRef, field_:IRADTField)
 	WriteADTField(owner:ValueRef, field_:IRADTField, value:ValueRef)
 	
 	Unreachable
 	Jump(target:BasicBlock)
 	CondJump(val:ValueRef, ifTrue:BasicBlock, ifFalse:BasicBlock)
+	ADTJump(val:ValueRef, adt_:IRADTDecl, branches:ADTJumpCase, def:BasicBlock)
 	Return (ref:ValueRef)
 	
 	field dbg:DebugLoc

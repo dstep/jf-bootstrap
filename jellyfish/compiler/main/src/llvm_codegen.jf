@@ -495,7 +495,7 @@ function LLVMCodegenADTConsBody(codegen:LLVMCodegen, cons:IRADTCons)
 		i = i + 1
 	end
 	
-	LLVMBuildRet(codegen.builder, obj)
+	LLVMBuildRet(codegen.builder, LLVMBuildBitCast(codegen.builder, obj, LLVMPointerType(LLVMCodegenADTDeclOpaque(codegen, cons.owner), 0), ""))
 end
 
 function LLVMCreateFunctionSignature(codegen:LLVMCodegen, name:string, params:IRParamList, retTyLoc:SrcLoc, retTy:IRType):pointer
@@ -746,14 +746,11 @@ function LLVMCodegenPreapreBasicBlocks(codegen:LLVMCodegen, blocks:BasicBlockLis
 end
 
 function LLMVCodegenBasicBlocks(codegen:LLVMCodegen, blocks:BasicBlockList)
-	while true do
-		match blocks
-		case Nil return
-		case Cons(block, tail)
-			blocks = tail
-			
-			LLMVCodegenBasicBlock(codegen, block)
-		end
+	match blocks
+	case Nil return
+	case Cons(block, tail)
+		LLMVCodegenBasicBlocks(codegen, tail)
+		LLMVCodegenBasicBlock(codegen, block)
 	end
 end
 
@@ -783,6 +780,25 @@ function LLVMCodegenPredicate(codegen:LLVMCodegen, cmp:Comparison):i32
 	case LE return 41
 	case GT return 38
 	case GE return 39
+	end
+end
+
+function count_branches(cases:ADTJumpCase):i32
+	match cases
+	case Nil return 0
+	case Cons(cons, bb, tail) return 1 + count_branches(tail)
+	end
+end
+
+function find_param_index(params:IRParamList, param:IRParam):i32
+	match params
+	case Nil return 0
+	case Cons(p, tail)
+		if p == param then
+			return 0
+		else
+			return 1 + find_param_index(tail, param)
+		end
 	end
 end
 
@@ -923,6 +939,31 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			case Args(argCount, argArray)
 				instr.llvmRef = LLVMBuildCall(codegen.builder, llvmFun, argArray, argCount, "")
 			end
+		case ADTExtract(val, cons, param)
+			var adtPtr = LLVMCodegenGetValue(codegen, val)
+			LLVMCodegenADTDeclFull(codegen, cons.owner)
+			
+			var idx = count_fields(cons.owner.fields) + 1 + find_param_index(cons.params, param)
+			var cast = LLVMBuildBitCast(codegen.builder, adtPtr, LLVMPointerType(LLVMCodegenADTConsDecl(codegen, cons), 0), "")
+			var gep = LLVMBuildStructGEP(codegen.builder, cast, idx, "")
+			instr.llvmRef = LLVMBuildLoad(codegen.builder, gep, "")
+		case ADTJump(val, adt_, branches, def)
+			var adtPtr = LLVMCodegenGetValue(codegen, val)
+			LLVMCodegenADTDeclFull(codegen, adt_)
+			var count = count_branches(branches)
+			var switch = LLVMBuildSwitch(codegen.builder, LLVMBuildLoad(codegen.builder, LLVMBuildStructGEP(codegen.builder, adtPtr, 0, ""), ""), def.llvmRef, count)
+			
+			var branchList = branches
+			var i = 0
+			while i < count do
+				match branchList
+				case Cons(cons, block, tail)
+					LLVMAddCase(switch, LLVMConstInt_wrap(llvmI32Type, cons.index, true), block.llvmRef)
+					branchList = tail
+				end
+				i = i + 1
+			end
+			return
 		case other
 			LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "instruction not implemented")
 		end

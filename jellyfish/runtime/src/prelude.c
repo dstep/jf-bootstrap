@@ -29,6 +29,9 @@ void* _jf_allocate(size_t size) {
 	return malloc(size);
 }
 
+void* (jf_allocate)(size_t size) {
+	return malloc(size);
+}
 
 jf_i32 jfprelude_LoadByte(jf_pointer ptr, jf_i32 offset){
 	return ((unsigned char*)ptr)[offset];

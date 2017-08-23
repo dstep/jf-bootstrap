@@ -343,6 +343,80 @@ function BCResolveType(bc:BCCompiler, ast:AstType):IRType
 	return type
 end
 
+function count_cases(cases:AstCaseList):i32
+	match cases
+	case Nil return 0
+	case Cons(case_, tail) return count_cases(tail) + 1
+	end
+end
+
+function BCCompilerBindParams(bc:BCCompiler, val:ValueRef, cons:IRADTCons, patterns:AstPatternList)
+	var params = cons.params
+	
+	while true do
+		match patterns 
+		case Nil
+			return
+		case Cons(pat, patterns_tail)
+			match params
+			case Nil
+				BCCompilerError(bc, pat.loc, "too many patterns")
+			case Cons(param, params_tail)
+				match pat
+				case Id(name)
+					BCCompilerAddScopeRef(bc, BinderGetName(name), LocalRef.Value(BCBuilderADTExtract(bc.builder, val, cons, param)))
+				case other
+					BCCompilerError(bc, pat.loc, "nested patterns not supported")
+				end
+				patterns = patterns_tail
+				params = params_tail
+			end			
+		end
+	end
+end
+
+function BCCompilerCheckCaseCovers(bc:BCCompiler, branches:ADTJumpCase, cons:IRADTCons):bool
+	while true do
+		match branches
+		case Nil return false
+		case Cons(cons_1, block, tail)
+			if cons == cons_1 then
+				return true
+			end
+			branches = tail
+		end
+	end
+end
+
+function BCCompilerCheckCaseCoverageDupes(bc:BCCompiler, loc:SrcLoc, branches:ADTJumpCase)
+	while true do
+		match branches
+		case Nil return 
+		case Cons(cons, block, tail)
+			if BCCompilerCheckCaseCovers(bc, tail, cons) then
+				BCCompilerError(bc, loc, "duplicate case")
+			end
+			branches = tail
+		end
+	end
+end
+
+function BCCompilerCheckCaseCoverage(bc:BCCompiler, loc:SrcLoc, branches:ADTJumpCase, adt_:IRADTDecl):bool
+	BCCompilerCheckCaseCoverageDupes(bc, loc, branches)
+	
+	var consList = adt_.cons
+	while true do
+		match consList
+		case Nil return true
+		case Cons(cons, tail)
+			if BCCompilerCheckCaseCovers(bc, branches, cons) == false then
+				return false
+			end
+			consList = tail
+		end
+	end
+end
+
 function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 	match bc.scope.termination
 	case Always
@@ -405,6 +479,99 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			BCBuilderArrayWrite(bc.builder, array, idx, val)
 		case other
 			BCCompilerError(bc, ast.loc, "reference type is not implemented")
+		end
+	case Match(expr, cases)
+		var targetExpr = BCCompileExprNoHint(bc, expr)
+		
+		match ValueRefGetType(targetExpr)
+		case ADT(adt_)
+			var currentBlock = bc.builder.bb
+		
+			var joinBlock = BasicBlockCreate(bc.frame)
+			
+			var count = count_cases(cases)
+			
+			var cumulativeScope = BCCompilerEnterScope(bc) 
+			cumulativeScope.termination = Termination.Always
+			BCCompilerLeaveScope(bc)
+			
+			var defBlock:BasicBlock = joinBlock
+			
+			var i = 0
+			
+			var catchAll = false
+			
+			var branches = ADTJumpCase.Nil
+			
+			while i < count do
+				match cases
+				case Cons(case_, tail)
+					cases = tail
+					
+					var caseBlock = BasicBlockCreate(bc.frame)
+					
+					BCBuilderSetInsertPoint(bc.builder, caseBlock)
+					
+					var scope = BCCompilerEnterScope(bc)
+					var params = AstPatternList.Nil
+					var pattern_id:string
+					
+					match case_.pattern
+					case Id(pattern)
+						pattern_id = BinderGetName(pattern)
+					case Cons(pattern, pat_params)
+						pattern_id = BinderGetName(pattern)
+						params = pat_params
+					end
+					
+					if catchAll then
+						BCCompilerError(bc, case_.loc, "match case is redundand")
+					end
+					
+					match IRADTFindConstructor(adt_, pattern_id)
+					case Nothing
+						match params
+						case Nothing							
+							catchAll = true
+							BCCompilerAddScopeRef(bc, pattern_id, LocalRef.Value(targetExpr))
+							defBlock = caseBlock
+						case Cons(a_1,a_2)
+							BCCompilerError(bc, case_.pattern.loc, "adt doesn't have such constructor")
+						end
+					case Just(cons)						
+						BCCompilerBindParams(bc, targetExpr, cons, params)
+						branches = ADTJumpCase.Cons(cons, caseBlock, branches)
+						catchAll = BCCompilerCheckCaseCoverage(bc, case_.loc, branches, adt_)
+					end
+					
+					BCCompileCode(bc, case_.block)
+					
+					BCCompilerLeaveScope(bc)
+					
+					if i == 0 then
+						cumulativeScope = scope
+					else
+						ScopeChoice(cumulativeScope, scope)
+					end
+					
+					BCBuilderJump(bc.builder, joinBlock)
+				end
+				i = i + 1
+			end
+			
+			if catchAll == false then
+				var scope = BCCompilerEnterScope(bc)
+				BCCompilerLeaveScope(bc)
+				ScopeChoice(cumulativeScope, scope)
+			end
+			
+			ScopeConcat(bc.scope, cumulativeScope)
+			
+			BCBuilderSetInsertPoint(bc.builder, currentBlock)
+			BCBuilderADTJump(bc.builder, adt_, targetExpr, branches, defBlock)
+			BCBuilderSetInsertPoint(bc.builder, joinBlock)
+		case other
+			BCCompilerError(bc, ast.loc, "can't match non-adt value")
 		end
 	case While(cond, body)		
 		var condBlock = BasicBlockCreate(bc.frame)
