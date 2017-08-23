@@ -1,0 +1,115 @@
+import main.ast_stmt
+import main.ast_expr
+import main.ast_type
+
+adt SrcLoc
+	At(line:i32, col:i32)
+end
+
+adt AstImportList
+	Nil
+	Cons(importDecl:AstImport, tail:AstImportList)
+end
+
+adt AstFile
+	New
+	
+	field imports:AstImportList
+	field tlds:AstTopLevelList
+end
+
+adt QualID
+	End
+	Piece(id:string, rest:QualID)
+end
+
+adt AstImport
+	New
+	
+	field loc:SrcLoc
+	field qid:QualID
+end
+
+adt AstTopLevelList
+	Nil
+	Cons(tld:AstTopLevel, tail:AstTopLevelList)
+end
+
+adt Binder
+	NameAt(id:string, loc:SrcLoc)
+end
+
+function BinderGetName(binder:Binder):string
+	match binder
+	case NameAt(name, loc) return name
+	end
+end
+
+adt AstADTConsList
+	Nil
+	Cons(cons:AstADTCons, tail:AstADTConsList)
+end
+
+adt AstADTFieldsList
+	Nil
+	Cons(field_:AstField, tail:AstADTFieldsList)
+end
+
+adt AstADTCons
+	New
+	
+	field name:Binder
+	field params:AstParamList
+end
+
+adt AstField
+	New
+	
+	field name:Binder
+	field type:AstType
+end
+
+adt AstParam
+	New
+	
+	field name:Binder
+	field type:AstType
+end
+
+adt AstParamList
+	Nil
+	Cons(param:AstParam, tail:AstParamList)
+end
+
+adt AstFuncBody
+	FFIImport(text:string)
+	Block(stmts:AstStmtList)
+	
+	field loc:SrcLoc
+end
+
+adt AstTopLevel
+	ADT(name:Binder, cons:AstADTConsList, fields:AstADTFieldsList)
+	Function(name:Binder, params:AstParamList, retTy:MaybeAstType, body:AstFuncBody)
+	Global(name:Binder, type:AstType, init:AstExpr)
+	
+	field loc:SrcLoc
+end
+
+function PrintQualIDHelper(qid:QualID):string
+	match qid
+	case Piece(id, tail)
+		return "." + id + PrintQualIDHelper(tail)
+	case End
+		return ""
+	end
+end
+
+function PrintQualID(qid:QualID):string
+	match qid
+	case Piece(id, tail)
+		return id + PrintQualIDHelper(tail)
+	case End
+		return ""
+	end
+end

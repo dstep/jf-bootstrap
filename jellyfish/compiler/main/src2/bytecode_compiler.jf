@@ -179,7 +179,7 @@ function BCCompileSymbols(bc:BCCompiler, symbols:IRSymbolList)
 	end
 end
 
-function BCCompilerError(compiler:BCCompiler, loc:SrcLoc, message:string):undef
+function BCCompilerError(compiler:BCCompiler, loc:SrcLoc, message:string)
 	match loc
 	case At(line, col)
 		WriteLn(compiler.file.file.path + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): BCCompiler Error: " + message)
@@ -196,6 +196,8 @@ function BCompileSymbol(bc:BCCompiler, symbol:IRSymbol)
 		BCCompileGlobal(bc, global_)
 	case Function(fun)
 		BCCompileFunction(bc, fun)
+	case other
+		BCCompilerError(bc, symbol.loc, "symbol not implemented")
 	end
 end
 
@@ -459,15 +461,7 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			BCCompilerVarInitialized(bc, var_)
 		end
 	case Eval(expr)
-		var val = BCCompileExprNoHint(bc, expr)
-		match ValueRefGetType(val)
-		case Prim(prim)
-			match prim
-			case Undef
-				bc.scope.termination = Termination.Always
-				BCBuilderUnreachable(bc.builder)
-			end
-		end
+		BCCompileExprNoHint(bc, expr)
 	case Assign(lhs, rhs)
 		var ref = BCCompileWritableReference(bc, lhs)
 		var val = BCCompileExprAs(bc, rhs, WritableReferenceGetType(ref))
@@ -483,6 +477,8 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			BCBuilderWriteADTField(bc.builder, ptr, field_, val)
 		case ArrayIndex(array, idx, type)
 			BCBuilderArrayWrite(bc.builder, array, idx, val)
+		case other
+			BCCompilerError(bc, ast.loc, "reference type is not implemented")
 		end
 	case Match(expr, cases)
 		var targetExpr = BCCompileExprNoHint(bc, expr)
@@ -507,11 +503,10 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			
 			var branches = ADTJumpCase.Nil
 			
-			var caseList = cases
 			while i < count do
-				match caseList
+				match cases
 				case Cons(case_, tail)
-					caseList = tail
+					cases = tail
 					
 					var caseBlock = BasicBlockCreate(bc.frame)
 					
@@ -536,7 +531,7 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 					match IRADTFindConstructor(adt_, pattern_id)
 					case Nothing
 						match params
-						case Nil							
+						case Nothing							
 							catchAll = true
 							BCCompilerAddScopeRef(bc, pattern_id, LocalRef.Value(targetExpr))
 							defBlock = caseBlock
@@ -683,6 +678,8 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 		BCCompilerLeaveScope(bc)
 		
 		ScopeConcat(bc.scope, scope)
+	case other
+		BCCompilerError(bc, ast.loc, "statement is not implemented")
 	end
 end
 
@@ -702,6 +699,8 @@ function BCCompileWritableReference(bc:BCCompiler, ast:AstExpr):WritableReferenc
 			case other
 				BCCompilerError(bc, ast.loc, "writing to this symbol reference is not implemented")
 			end
+		case other
+			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
 		end
 	case Index(lhs, rhs)
 		var ref = BCCompileIndexableReference(bc, lhs)
@@ -743,10 +742,7 @@ function BCCompileIndexableReference(bc:BCCompiler, ast:AstExpr):IndexableRef
 		var ref = BCCompilerResolveRef(bc, ast.loc, id)
 		match ref
 		case Global(symbol)
-			match symbol
-			case ADT
-				return IndexableRef.Symbol(symbol)
-			end
+			return IndexableRef.Symbol(symbol)
 		end
 	end
 	
@@ -843,6 +839,8 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 			case other
 				BCCompilerError(bc, ast.loc, "reading this symbol reference is not implemented")
 			end
+		case other
+			BCCompilerError(bc, ast.loc, "reading this reference is not implemented")
 		end
 	case Dot(lhs, id)
 		var ref = BCCompileIndexableReference(bc, lhs)
@@ -873,9 +871,9 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 				end
 			case other BCCompilerError(bc, ast.loc, "indexing this reference is not implemented")
 			end
+		case other
+			BCCompilerError(bc, ast.loc, "indexing this reference is not implemented")
 		end
-		
-		BCCompilerError(bc, ast.loc, "invalid dot expression")
 	case BinOp(lhs, op, rhs)
 		var opId:i32 = 0
 		match op
@@ -985,14 +983,13 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 			
 			BCBuilderSetInsertPoint(bc.builder, secondBlock)
 			var rExpr = BCCompileExprAs(bc, rhs, boolTy)
-			var exitBlock = bc.builder.bb
 			BCBuilderJump(bc.builder, joinBlock)
 			
 			BCBuilderSetInsertPoint(bc.builder, joinBlock)
 			
 			var phi0 = PHIList.Nil		
 			var phi1 = PHIList.Cons(currentBlock, ValueRef.ConstBool(opId == 5, boolTy), phi0)
-			var phi2 = PHIList.Cons(exitBlock, rExpr, phi1)
+			var phi2 = PHIList.Cons(secondBlock, rExpr, phi1)
 			
 			return BCBuilderPHI(bc.builder, boolTy, phi2)
 		end
@@ -1009,10 +1006,13 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 				return BCBuilderCallFunction(bc.builder, fun, args, retTy)
 			case ADTConstructor(cons)
 				return BCBuilderCallConstructor(bc.builder, cons, args, retTy)
+			case other
+				BCCompilerError(bc, head.loc, "callable ref not implemented")
 			end
 		case other
 			BCCompilerError(bc, head.loc, "is not a callable type")
 		end
+	case other BCCompilerError(bc, ast.loc, "expression not implemented")
 	end
 end
 
@@ -1086,6 +1086,7 @@ function BCCompileCoerce(bc:BCCompiler, loc:SrcLoc, val:ValueRef, targetType:IRT
 	case FromUndef 
 		BCBuilderUnreachable(bc.builder)
 		return ValueRef.Undef(targetType)
+	case other BCCompilerError(bc, loc, "coercion not implemented")
 	end
 end
 

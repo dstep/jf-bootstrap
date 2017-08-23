@@ -9,12 +9,14 @@ package com.meduzik.jf.ir.type {
 		public static const Str:IRPrimType = new IRPrimType("string");
 		public static const Unit:IRPrimType = new IRPrimType("unit");
 		public static const Bool:IRPrimType = new IRPrimType("bool");
+		public static const Undef:IRPrimType = new IRPrimType("undef");
 		
 		public static const All:Vector.<IRPrimType> = Vector.<IRPrimType>([
 			Pointer,
 			I32,
 			Str,
-			Bool
+			Bool,
+			Undef
 		]);
 		
 		public var id:String;

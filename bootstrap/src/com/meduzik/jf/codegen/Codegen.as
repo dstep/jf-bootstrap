@@ -793,6 +793,9 @@ package com.meduzik.jf.codegen {
 					case IRPrimType.Bool:{
 						return ("jf_bool");
 					}break;
+					case IRPrimType.Undef:{
+						return ("jf_pointer");
+					}break;
 					default:{
 						throw new Error("Unimplemented prim type");
 					}break;

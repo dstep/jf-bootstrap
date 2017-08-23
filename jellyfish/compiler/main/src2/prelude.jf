@@ -18,7 +18,7 @@ function Substring(str:string, from:i32, length:i32):string import "jfprelude_Su
 function LoadByte(ptr:pointer, offset:i32):i32 import "jfprelude_LoadByte"
 function LoadString(ptr:pointer, offset:i32, size:i32):string import "jfprelude_LoadString"
 
-function Exit(code:i32):undef import "jfprelude_Exit"
+function Exit(code:i32):string import "jfprelude_Exit"
 
 adt FileData
 	None

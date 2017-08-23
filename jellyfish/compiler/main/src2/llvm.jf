@@ -12,7 +12,7 @@ function LLVMInt32TypeInContext(context:pointer):pointer import "LLVMInt32TypeIn
 
 function LLVMVoidTypeInContext(context:pointer):pointer import "LLVMVoidTypeInContext"
 
-function LLVMFunctionType(returnType:pointer, paramTypes:pointer[], paramCount:i32, vararg:bool):pointer import "LLVMFunctionType"
+function LLVMFunctionType(returnType:pointer, paramTypes:pointer, paramCount:i32, vararg:bool):pointer import "LLVMFunctionType"
 
 function LLVMAddFunction(module:pointer, name:string, type:pointer):pointer import "LLVMAddFunction"
 

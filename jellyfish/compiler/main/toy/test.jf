@@ -1,307 +1,53 @@
-function Rand():i32 import "rand"
-function Trace(message:string) import "puts"
-function IntToStr(x:i32):string import "jfprelude_IntToStr"
-function StrToInt(x:string):i32 import "jfprelude_StrToInt"
-function ReadLn(prompt:string):string import "jfprelude_ReadLn"
+adt Foo
+	B(b:Bar)
+	Q
+end
 
-
-adt Player
+adt Bar
 	X
-	O
+	Y
 end
 
-adt Winner
-	Player(player:Player)
-	Draw
-	StillPlaying
-end
+function err(i:i32):undef import "exit"
 
-adt CellContent
-	Empty
-	Filled(player:Player)
-end
-
-adt Cell
-	New
-	
-	field content:CellContent
-end
-
-adt CellList
-	Nil
-	Cons(cell:Cell, tail:CellList)
-end
-
-function PlayerToString(player:Player):string
-	match player 
-	case X
-		return "X"
-	case O
-		return "O"
-	end
-end
-
-function createEmptyGrid():CellList
-	var grid:CellList = CellList.Nil()
-	
-	var i = 9
-	while i > 0 do
-		var cell:Cell = Cell.New()
-		cell.content = CellContent.Empty()
-		grid = CellList.Cons(cell, grid)
-		i = i - 1
-	end
-	
-	return grid
-end
-
-function drawGrid(grid:CellList)
-	var x = 0
-	var y = 0
-	
-	while y < 3 do
-		x = 0		
-		var line = ""
-		while x < 3 do
-			match grid 
-			case Cons(cell, tail)
-				match cell.content
-				case Empty
-					line = line + " "
-				case Filled(player)
-					match player
-					case X
-						line = line + "X"
-					case O
-						line = line + "O"
-					end
-				end
-				grid = tail
-			end
-			if x < 2 then
-				line = line + "|"
-			end
-			x = x + 1
-		end
-		Trace(line)
-		if y < 2 then
-			Trace("-+-+-")
-		end
-		y = y + 1
-	end
-end
-
-function skip(grid:CellList, n:i32):CellList
-	while n > 0 do
-		match grid
-		case Cons(cell, tail)
-			grid = tail
-		end
-		n = n - 1
-	end
-	return grid
-end
-
-function getCell(grid:CellList, n:i32):Cell
-	grid = skip(grid, n)
-	match grid
-	case Cons(cell, tail)
-		return cell
-	case other return undef
-	end
-end
-
-function put(grid:CellList, n:i32, player:Player):bool
-	var cell = getCell(grid, n)
-	
-	match cell.content
-	case Empty
-		cell.content = CellContent.Filled(player)
-		return true
-	case other
-		return false
-	end
-end
-
-function translate_coord(x:i32):i32
-	if x == 7 then
-		return 0
-	elif x == 8 then
-		return 1
-	elif x == 9 then
-		return 2
-	elif x == 4 then
-		return 3
-	elif x == 5 then
-		return 4
-	elif x == 6 then
-		return 5
-	elif x == 1 then
-		return 6
-	elif x == 2 then
-		return 7
-	elif x == 3 then
-		return 8
-	else
-		return 0-1
-	end
-end
-
-function translate_magic(x:i32):i32
-	if x == 8 then
-		return 0
-	elif x == 1 then
-		return 1
-	elif x == 6 then
-		return 2
-	elif x == 3 then
-		return 3
-	elif x == 5 then
-		return 4
-	elif x == 7 then
-		return 5
-	elif x == 4 then
-		return 6
-	elif x == 9 then
-		return 7
-	elif x == 2 then
-		return 8
-	else
-		return 0-1
-	end
-end
-
-function getValue(c:CellContent):i32
-	match c 
-	case Empty
-		return 0
-	case Filled(p)
-		match p
+function foo(f:Foo):i32
+	match f
+	case B(b)
+		match b
 		case X
-			return 1
-		case O
-			return 2
+			cc(0)
+		case f
+			cc(1)
 		end
+	case other
+		return 0
 	end
 end
 
-function isSame(c1:CellContent, c2:CellContent):bool
-	var c1val = getValue(c1)
-	var c2val = getValue(c2)
-	
-	return c1val == c2val
-end
 
-function checkLine(grid:CellList, a:i32, b:i32, c:i32):CellContent
-	var cellA = getCell(grid, translate_magic(a)).content
-	var cellB = getCell(grid, translate_magic(b)).content
-	var cellC = getCell(grid, translate_magic(c)).content
-	
-	if isSame(cellA, cellB) and isSame(cellB, cellC) then
-		return cellA
-	else
-		return CellContent.Empty()
-	end
-end
-	
-
-function checkWinner(grid:CellList):Winner
-	var a = 1
-	while a < 10 do
-		var b = a + 1
-		while b < 10 do
-			var c = b + 1
-			while c < 10 do
-				if a + b + c == 15 then
-					match checkLine(grid, a, b, c) 
-					case Filled(player)						
-						return Winner.Player(player)
-					end				
-				end
-				c = c + 1
-			end
-			b = b + 1
+function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
+	match type
+	case Ref(ref)
+		LLVMCodegenError(codegen, loc, "ref types must not appear in the codegen")
+	case Prim(prim)
+		match prim
+		case Unit return LLVMVoidTypeInContext(llvm)
+		case I32 return LLVMInt32TypeInContext(llvm)
+		case String llvmStringType
+		case Pointer return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
+		case Bool return LLVMInt1TypeInContext(llvm)
+		case other LLVMCodegenError(codegen, loc, "prim type not implemented")
 		end
-		a = a + 1
-	end
-	
-	var i = 0
-	while i < 9 do
-		match getCell(grid, i).content
-		case Empty
-			return Winner.StillPlaying()
-		end
-		i = i + 1
-	end
-	
-	return Winner.Draw()
-end
-
-function tryPlace(grid:CellList, n:i32, player:Player):bool
-	if n < 0 or n > 8 then
-		return false
-	end
-	
-	if put(grid, n, player) then
-		drawGrid(grid)
-		return true
-	else
-		return false
-	end
-end
-
-function checkGameOver(grid:CellList):bool
-	match checkWinner(grid)
-	case Draw
-		Trace("It's a draw")
-		return true
-	case Player(winner)
-		Trace("The winner is " + PlayerToString(winner))
-		return true
-	end
-	return false
-end
-
-function ai(grid:CellList, playerPlays:Player, aiPlays:Player):i32
-	
-	var i:i32 = 0
-	while i < 9 do
-		if getValue(getCell(grid, i).content) == 0 then
-			return i
-		end
-		i = i + 1
-	end
-	
-	return 0-1
-end
-
-function run()
-	var grid = createEmptyGrid()
-	drawGrid(grid)
-	
-	var playerPlays = Player.X()
-	var aiPlays = Player.O()
-	
-	var playing = true	
-	while playing do
-		Trace("You are playing as " + PlayerToString(playerPlays))
-		
-		var i = translate_coord(StrToInt(ReadLn("You turn? ")))
-		if tryPlace(grid, i, playerPlays) then
-			if checkGameOver(grid) then
-				playing = false
-			else
-				var x = ai(grid, playerPlays, aiPlays)
-				
-				if tryPlace(grid, x, aiPlays) then
-					if checkGameOver(grid) then
-						playing = false
-					end
-				else
-					Trace("Sorry, this AI is too dumb to make a move.")
-					playing = false
-				end
-			end
-		end
+	case ADT(adt_)
+		return LLVMPointerType(LLVMCodegenADTDeclOpaque(codegen, adt_), 0)
+	case ADTMetaclass(decl)
+		LLVMCodegenError(codegen, loc, "meta types must not appear in the codegen")
+	case ArrayUnsized(elementType)
+		var elTy = LLVMCodegenType(codegen, loc, elementType)
+		return LLVMPointerType(elTy, 0)
+	case ArraySized(elementType, size)
+		LLVMCodegenError(codegen, loc, "sized array type should not appear in a compiled bytecode")
+	case other
+		LLVMCodegenError(codegen, loc, "type not implemented")
 	end
 end

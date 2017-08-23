@@ -79,6 +79,8 @@ function IRCompileSymbol(compiler:IRCompiler, symbol:IRSymbol)
 		IRCompileADT(compiler, adt_)
 	case Function(fun)
 		IRCompileFunction(compiler, fun)
+	case other
+		IRCompilerError(compiler, symbol.loc, "symbol not implemented")
 	end
 end
 
@@ -266,7 +268,7 @@ function IRResolveImports(compiler:IRCompiler, imports:IRImportList)
 	end
 end
 
-function IRCompilerError(compiler:IRCompiler, loc:SrcLoc, message:string):undef
+function IRCompilerError(compiler:IRCompiler, loc:SrcLoc, message:string)
 	match loc
 	case At(line, col)
 		WriteLn(compiler.file.file.path + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): IRCompiler Error: " + message)

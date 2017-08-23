@@ -1,5 +1,9 @@
-import llvm.llvm
-import core.prelude
+function Rand():i32 import "rand"
+function Trace(message:string) import "puts"
+function IntToStr(x:i32):string import "jfprelude_IntToStr"
+function StrToInt(x:string):i32 import "jfprelude_StrToInt"
+function ReadLn(prompt:string):string import "jfprelude_ReadLn"
+
 
 adt Player
 	X
@@ -103,6 +107,7 @@ function getCell(grid:CellList, n:i32):Cell
 	match grid
 	case Cons(cell, tail)
 		return cell
+	case other return undef
 	end
 end
 
@@ -180,14 +185,14 @@ function getValue(c:CellContent):i32
 	end
 end
 
-function isSame(c1 c2:CellContent):bool
+function isSame(c1:CellContent, c2:CellContent):bool
 	var c1val = getValue(c1)
 	var c2val = getValue(c2)
 	
 	return c1val == c2val
 end
 
-function checkLine(grid:CellList, a b c:i32):CellContent
+function checkLine(grid:CellList, a:i32, b:i32, c:i32):CellContent
 	var cellA = getCell(grid, translate_magic(a)).content
 	var cellB = getCell(grid, translate_magic(b)).content
 	var cellC = getCell(grid, translate_magic(c)).content
@@ -209,7 +214,7 @@ function checkWinner(grid:CellList):Winner
 			while c < 10 do
 				if a + b + c == 15 then
 					match checkLine(grid, a, b, c) 
-					case Filled(player)
+					case Filled(player)						
 						return Winner.Player(player)
 					end				
 				end

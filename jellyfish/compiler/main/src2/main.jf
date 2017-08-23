@@ -17,8 +17,10 @@ import main.llvm_codegen
 --parser +
 --ir builder +
 --ir compiler +
---bytecode builder +
---codegen +
+--bytecode builder
+--codegen
+	-- match
+
 global Compiler:CompilerContext = CompilerContextCreate()
 
 function ProcessFile(filename:string)	
@@ -61,12 +63,11 @@ function ProcessDir(dirname:string)
 end
 
 function run()
-	var dir = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\src"
+	var dir = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\compiler\\main\\toy"
 	
-	var cc = Compiler
-	cc.output = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\self_output"
+	Compiler.output = "D:\\Dropbox\\language_ws\\jf-bootstrap\\jellyfish\\self_output"
 	
-	ClearOutput(cc.output)
+	ClearOutput(Compiler.output)
 	
 	ProcessDir(dir)	
 	

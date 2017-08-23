@@ -81,8 +81,6 @@ global llvmPtrType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmStringType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmI32Type:pointer = LLVMInt32TypeInContext(llvm)
 
-global llvmNullPtrList:pointer[] = new pointer[1]
-
 global IntrinsicStringConcat:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_concat", 2, llvmStringType, llvmStringType, llvmStringType)
 global IntrinsicStringCmp:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_compare", 2, llvmI32Type, llvmStringType, llvmStringType)
 global IntrinsicAlloc:IntrinsicInfo = IntrinsicInfoCreate1("jf_allocate", 1, llvmPtrType, llvmI32Type)
@@ -188,12 +186,12 @@ function LLVMCodegenSymbols(codegen:LLVMCodegen, symbols:IRSymbolList)
 	end
 end
 
-function LLVMCodegenError(codegen:LLVMCodegen, loc:SrcLoc, message:string):undef
+function LLVMCodegenError(codegen:LLVMCodegen, loc:SrcLoc, message:string)
 	match loc
 	case At(line, col)
 		WriteLn(codegen.file.file.path + "(line " + IntToStr(line + 1) + ", col " + IntToStr(col + 1) + "): LLVMCodegen Error: " + message)
 	end
-	return Exit(1)
+	Exit(1)
 end
 
 function LLVMCodegenSymbol(codegen:LLVMCodegen, symbol:IRSymbol)
@@ -205,6 +203,8 @@ function LLVMCodegenSymbol(codegen:LLVMCodegen, symbol:IRSymbol)
 		LLVMCodegenGlobal(codegen, global_)
 	case Function(fun)
 		LLVMCodegenFunction(codegen, fun)
+	case other
+		LLVMCodegenError(codegen, symbol.loc, "symbol not implemented")
 	end
 end
 
@@ -237,7 +237,7 @@ function MangleADTConsFunctionName(constr:IRADTCons):string
 end
 
 function MangleFunctionName(fun:IRFunctionDecl):string
-	if fun.symbol.owner.unit_.name == "main.main" and fun.symbol.name == "run" then
+	if fun.symbol.owner.unit_.name == "main.test" and fun.symbol.name == "run" then
 		return "_jf_entry_point"
 	end
 	
@@ -251,7 +251,6 @@ function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
 	var llvmFun = LLVMCodegenGlobalGetterDecl(codegen, global_)	
 	
 	var guard = LLVMAddGlobal(codegen.module, llvmI1Type, "")
-	LLVMSetLinkage(guard, LLVMPrivateLinkage())
 	LLVMSetInitializer(guard, LLVMConstInt_wrap(llvmI1Type, 0, true))
 	
 	var builder = codegen.builder
@@ -264,7 +263,7 @@ function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
 	
 	LLVMPositionBuilderAtEnd(builder, initBlock)
 	LLVMBuildStore(builder, LLVMConstInt_wrap(llvmI1Type, 1, true), guard)
-	var initVal = LLVMBuildCall(builder, LLVMCodegenGlobalInitDecl(codegen, global_), llvmNullPtrList, 0, "")
+	var initVal = LLVMBuildCall(builder, LLVMCodegenGlobalInitDecl(codegen, global_), Null(), 0, "")
 	LLVMBuildStore(builder, initVal, llvmDecl)
 	LLVMBuildRetVoid(builder)
 	
@@ -312,10 +311,10 @@ function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
 		match prim
 		case Unit return LLVMVoidTypeInContext(llvm)
 		case I32 return LLVMInt32TypeInContext(llvm)
-		case String return llvmStringType
+		case String llvmStringType
 		case Pointer return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 		case Bool return LLVMInt1TypeInContext(llvm)
-		case Undef return LLVMVoidTypeInContext(llvm)
+		case other LLVMCodegenError(codegen, loc, "prim type not implemented")
 		end
 	case ADT(adt_)
 		return LLVMPointerType(LLVMCodegenADTDeclOpaque(codegen, adt_), 0)
@@ -489,11 +488,10 @@ function LLVMCodegenADTConsBody(codegen:LLVMCodegen, cons:IRADTCons)
 	
 	LLVMBuildStore(codegen.builder, LLVMConstInt_wrap(llvmI32Type, cons.index, true), LLVMBuildStructGEP(codegen.builder, obj, 0, ""))
 	
-	var offset = count_fields(cons.owner.fields)
 	var n = count_params(cons.params)
 	var i = 0
 	while i < n do
-		LLVMBuildStore(codegen.builder, LLVMGetParam(llvmFun, i), LLVMBuildStructGEP(codegen.builder, obj, i + offset + 1, ""))
+		LLVMBuildStore(codegen.builder, LLVMGetParam(llvmFun, i), LLVMBuildStructGEP(codegen.builder, obj, i + 1, ""))
 		i = i + 1
 	end
 	
@@ -728,7 +726,6 @@ function IsVoidType(type:IRType):bool
 	match type
 	case Prim(prim)
 		match prim
-		case Undef return true
 		case Unit return true
 		end
 	end
@@ -825,12 +822,12 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			instr.llvmRef = val
 		case ReadGlobal(global_)
 			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
-			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), llvmNullPtrList, 0, "")
+			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), Null(), 0, "")
 			var val = LLVMBuildLoad(codegen.builder, globalVar, "")
 			instr.llvmRef = val
 		case WriteGlobal(global_, value)
 			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
-			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), llvmNullPtrList, 0, "")
+			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), Null(), 0, "")
 			LLVMBuildStore(codegen.builder, LLVMCodegenGetValue(codegen, value), globalVar)
 		case Unreachable
 			LLVMBuildUnreachable(codegen.builder)
@@ -910,6 +907,8 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 				case CompareString(cmp)
 					var diff = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringCmp), argArray, argCount, "")
 					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+				case other
+					LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "intrinsic not implemented")
 				end
 			end
 		case ReadADTField(ptr, field_)
@@ -965,6 +964,8 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 				i = i + 1
 			end
 			return
+		case other
+			LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "instruction not implemented")
 		end
 		
 		i = i + 1

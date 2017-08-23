@@ -13,6 +13,7 @@ function BuildKeywordTable():KeywordTable
 	KeywordTableInsert(table, "function", TokenType.KFunction)	
 	KeywordTableInsert(table, "end", TokenType.KEnd)	
 	KeywordTableInsert(table, "var", TokenType.KVar)	
+	KeywordTableInsert(table, "struct", TokenType.KStruct)	
 	KeywordTableInsert(table, "field", TokenType.KField)	
 	KeywordTableInsert(table, "new", TokenType.KNew)	
 	KeywordTableInsert(table, "return", TokenType.KReturn)	

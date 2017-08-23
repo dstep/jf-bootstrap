@@ -21,6 +21,10 @@ jf_string jf_string_concat(jf_string left, jf_string right) {
 	return s;
 }
 
+jf_i32 jf_string_compare(jf_string left, jf_string right) {
+	return strcmp(left, right);
+}
+
 jf_i32 jf_compare_strings(jf_string left, jf_string right) {
 	return strcmp(left, right);
 }

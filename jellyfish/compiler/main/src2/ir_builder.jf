@@ -122,6 +122,8 @@ function IRBuildSymbol(builder:IRBuilder, tld:AstTopLevel)
 		fun.params = IRBuildParamList(builder, params)
 		fun.retTy = IRBuildTypeNodeFromMaybe(builder, tld.loc, retTy)
 		fun.body = IRBuildFunctionBody(builder, body)
+	case other
+		IRBuilderError(builder, tld.loc, "symbol not implemented")
 	end
 end
 
@@ -132,6 +134,8 @@ function IRBuildFunctionBody(builder:IRBuilder, ast:AstFuncBody):IRFunctionBody
 		body = IRFunctionBody.FFIImport(text)
 	case Block(stmts)
 		body = IRFunctionBody.Block(IRBuildBlockNode(builder, stmts))
+	case other
+		IRBuilderError(builder, ast.loc, "function body type not implemented")
 	end
 	body.loc = ast.loc
 	return body
@@ -227,8 +231,6 @@ function IRBuildType(builder:IRBuilder, ast:AstType):IRType
 				return IRType.Prim(IRPrimType.Pointer)
 			elif id == "bool" then
 				return IRType.Prim(IRPrimType.Bool)
-			elif id == "undef" then
-				return IRType.Prim(IRPrimType.Undef)
 			else
 				var ref = IRTypeReference.New
 				ref.id = id
@@ -244,6 +246,8 @@ function IRBuildType(builder:IRBuilder, ast:AstType):IRType
 		case Just(expr)
 			return IRType.ArraySized(IRBuildType(builder, elementTy), IRBuildExprNode(builder, expr))
 		end
+	case other
+		IRBuilderError(builder, ast.loc, "type not implemented")
 	end
 end
 

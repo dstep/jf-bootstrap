@@ -185,6 +185,9 @@ function WritableReferenceGetType(ref:WritableReference):IRType
 		return field_.type.type
 	case ArrayIndex(array, idx, type)
 		return type
+	case other
+		WriteLn("writable reference not implemented")
+		Exit(1)
 	end
 end
 
@@ -202,6 +205,9 @@ function ValueRefGetType(value:ValueRef):IRType
 		return ty
 	case Undef(ty)
 		return ty
+	case other
+		WriteLn("value ref not implemented")
+		Exit(1)
 	end
 end
 
@@ -211,6 +217,9 @@ function CallableRefGetType(value:CallableRef):IRType
 		return fun.type
 	case ADTConstructor(cons)
 		return cons.type
+	case other
+		WriteLn("callable ref not implemented")
+		Exit(1)
 	end
 end
 
