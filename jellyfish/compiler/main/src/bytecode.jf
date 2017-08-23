@@ -18,10 +18,18 @@ end
 adt WritableReference
 	Variable(var_:Variable)
 	Global(global_:IRGlobalDecl)
+	ArrayIndex(value:ValueRef, index:ValueRef, type:IRType)
+	ADTField(value:ValueRef, field_:IRADTField)
+end
+
+adt IndexableRef
+	Symbol(symbol:IRSymbol)
+	Value(val:ValueRef)
 end
 
 adt CallableRef
 	Function(fun:IRFunctionDecl)
+	ADTConstructor(cons:IRADTCons)
 end
 
 adt DebugLoc
@@ -97,17 +105,26 @@ adt Intrinsic
 	CompareI32(op:Comparison)
 	CompareString(op:Comparison)
 	ComparePointer(op:Comparison)
+	CompareRefEq(op:Comparison)
 	StringConcat
+	NewArray(elTy:IRType)
 end
 
 adt Instruction
 	WriteVariable(var_:Variable, value:ValueRef)
-	ReadVariable(var_:Variable) 
+	ReadVariable(var_:Variable)
+	CallConstructor(cons:IRADTCons, args:ValueRefList)
 	CallFunction(fun:IRFunctionDecl, args:ValueRefList)
 	CallIntrinsic(intrinsic:Intrinsic, args:ValueRefList)
 	ReadGlobal(global_:IRGlobalDecl)
 	WriteGlobal(global_:IRGlobalDecl, value:ValueRef)
 	PHI(phi:PHIList)
+	
+	ArrayRead(array:ValueRef, idx:ValueRef)
+	ArrayWrite(array:ValueRef, idx:ValueRef, value:ValueRef)
+	
+	ReadADTField(owner:ValueRef, field_:IRADTField)
+	WriteADTField(owner:ValueRef, field_:IRADTField, value:ValueRef)
 	
 	Unreachable
 	Jump(target:BasicBlock)
@@ -157,6 +174,10 @@ function WritableReferenceGetType(ref:WritableReference):IRType
 		return var_.type
 	case Global(global_)
 		return global_.type.type
+	case ADTField(owner, field_)
+		return field_.type.type
+	case ArrayIndex(array, idx, type)
+		return type
 	case other
 		WriteLn("writable reference not implemented")
 		Exit(1)
@@ -185,6 +206,8 @@ function CallableRefGetType(value:CallableRef):IRType
 	match value
 	case Function(fun)
 		return fun.type
+	case ADTConstructor(cons)
+		return cons.type
 	case other
 		WriteLn("callable ref not implemented")
 		Exit(1)

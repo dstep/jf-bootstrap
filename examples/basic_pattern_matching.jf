@@ -1,5 +1,5 @@
-import llvm.llvm
-import core.prelude
+function Trace(message:string) import "puts"
+function IntToStr(x:i32):string import "IntToStr"
 
 adt Expr
 	Cons(x:i32)

@@ -34,6 +34,35 @@ adt LLVMCodegen
 	field vars:VarToValue
 	
 	field latePhi:LatePHIList
+	
+	field adts:LLVMADTList
+end
+
+adt LLVMADT
+	New
+	
+	field adt_:IRADTDecl
+	field type:pointer
+	field opaque:bool
+	
+	field cons:LLVMADTConsList
+end
+
+adt LLVMADTList
+	Nil
+	Cons(adt_:IRADTDecl, llvm:LLVMADT, tail:LLVMADTList)
+end
+
+adt LLVMADTCons
+	New
+	
+	field cons:LLVMADTConsList
+	field type:pointer
+end
+
+adt LLVMADTConsList
+	Nil
+	Cons(cons:IRADTCons, llvm:LLVMADTCons, tail:LLVMADTConsList)
 end
 
 adt IntrinsicInfo
@@ -47,11 +76,14 @@ end
 
 global llvm:pointer = LLVMContextCreate()
 
+global llvmI1Type:pointer = LLVMInt1TypeInContext(llvm)
+global llvmPtrType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmStringType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmI32Type:pointer = LLVMInt32TypeInContext(llvm)
 
 global IntrinsicStringConcat:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_concat", 2, llvmStringType, llvmStringType, llvmStringType)
 global IntrinsicStringCmp:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_compare", 2, llvmI32Type, llvmStringType, llvmStringType)
+global IntrinsicAlloc:IntrinsicInfo = IntrinsicInfoCreate1("jf_allocate", 1, llvmPtrType, llvmI32Type)
 
 
 
@@ -70,6 +102,13 @@ function IntrinsicInfoCreate2(name:string, count:i32, ret:pointer, p1:pointer, p
 	info.params[1] = p2
 	return info
 end
+
+function IntrinsicInfoCreate1(name:string, count:i32, ret:pointer, p1:pointer):IntrinsicInfo
+	var info = IntrinsicInfoCreate(name, count, ret)
+	info.params[0] = p1
+	return info
+end
+
 
 function RunLLVMCodegen(context:CompilerContext)
 	LLVMCodegenUnits(context, context.units)
@@ -128,6 +167,10 @@ function LLVMCodegenCreate(context:CompilerContext, file:IRSourceFile):LLVMCodeg
 	var codegen:LLVMCodegen = LLVMCodegen.New
 	codegen.context = context
 	codegen.file = file
+	codegen.adts = LLVMADTList.Nil
+	
+	var builder = LLVMCreateBuilderInContext(llvm)
+	codegen.builder = builder
 	
 	return codegen
 end
@@ -154,7 +197,8 @@ end
 function LLVMCodegenSymbol(codegen:LLVMCodegen, symbol:IRSymbol)
 	match symbol
 	case ADT(adt_)
-		--do nothing for adt yet
+		LLVMCodegenADTDeclFull(codegen, adt_)
+		LLVMCodegenADTConsDecls(codegen, adt_.cons)
 	case Global(global_)
 		LLVMCodegenGlobal(codegen, global_)
 	case Function(fun)
@@ -169,7 +213,27 @@ function MangleUnitName(unit_:IRCompilationUnit):string
 end
 
 function MangleGlobalName(global_:IRGlobalDecl):string
-	return MangleUnitName(global_.symbol.owner.unit_) + ".g." + global_.symbol.name
+	return "g$" + MangleUnitName(global_.symbol.owner.unit_) + "." + global_.symbol.name
+end
+
+function MangleGlobalGetterName(global_:IRGlobalDecl):string
+	return "gg$" + MangleUnitName(global_.symbol.owner.unit_) + "." + global_.symbol.name
+end
+
+function MangleGlobalInitName(global_:IRGlobalDecl):string
+	return "gi$" + MangleUnitName(global_.symbol.owner.unit_) + "." + global_.symbol.name
+end
+
+function MangleADTName(adt_:IRADTDecl):string
+	return "adt$" + MangleUnitName(adt_.symbol.owner.unit_) + "." + adt_.symbol.name
+end
+
+function MangleADTConsName(constr:IRADTCons):string
+	return "adtc$" + MangleUnitName(constr.owner.symbol.owner.unit_) + "." + constr.owner.symbol.name + "." + constr.name
+end
+
+function MangleADTConsFunctionName(constr:IRADTCons):string
+	return "adtcfn$" + MangleADTConsName(constr)
 end
 
 function MangleFunctionName(fun:IRFunctionDecl):string
@@ -177,11 +241,41 @@ function MangleFunctionName(fun:IRFunctionDecl):string
 		return "_jf_entry_point"
 	end
 	
-	return MangleUnitName(fun.symbol.owner.unit_) + ".fn." + fun.symbol.name
+	return "fn$" + MangleUnitName(fun.symbol.owner.unit_) + "." + fun.symbol.name
 end
 
 function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
-	LLVMCodegenGlobalDecl(codegen, global_)
+	var llvmDecl = LLVMCodegenGlobalDecl(codegen, global_)
+	LLVMSetInitializer(llvmDecl, LLVMGetUndef(LLVMGetElementType(LLVMTypeOf(llvmDecl))))
+	
+	var llvmFun = LLVMCodegenGlobalGetterDecl(codegen, global_)	
+	
+	var guard = LLVMAddGlobal(codegen.module, llvmI1Type, "")
+	LLVMSetInitializer(guard, LLVMConstInt_wrap(llvmI1Type, 0, true))
+	
+	var builder = codegen.builder
+	var bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
+	var retBlock = LLVMAppendBasicBlockInContext(llvm, llvmFun, "ret")
+	var initBlock = LLVMAppendBasicBlockInContext(llvm, llvmFun, "init")
+	LLVMPositionBuilderAtEnd(builder, bb)
+	var guardVal = LLVMBuildLoad(builder, guard, "")
+	LLVMBuildCondBr(builder, guardVal, retBlock, initBlock)
+	
+	LLVMPositionBuilderAtEnd(builder, initBlock)
+	LLVMBuildStore(builder, LLVMConstInt_wrap(llvmI1Type, 1, true), guard)
+	var initVal = LLVMBuildCall(builder, LLVMCodegenGlobalInitDecl(codegen, global_), Null(), 0, "")
+	LLVMBuildStore(builder, initVal, llvmDecl)
+	LLVMBuildRetVoid(builder)
+	
+	LLVMPositionBuilderAtEnd(builder, retBlock)
+	LLVMBuildRetVoid(builder)	
+	
+	llvmFun = LLVMCodegenGlobalInitDecl(codegen, global_)
+	LLVMCodegenClearState(codegen)
+	codegen.llvmFun = llvmFun
+	bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
+	LLVMPositionBuilderAtEnd(builder, bb)
+	LLVMCodegenFunctionFrame(codegen, global_.expr.frame)
 end
 
 function LLVMCodegenGlobalDecl(codegen:LLVMCodegen, global_:IRGlobalDecl):pointer
@@ -195,6 +289,18 @@ function LLVMCodegenGlobalDecl(codegen:LLVMCodegen, global_:IRGlobalDecl):pointe
 	end
 		
 	return gval
+end
+
+function LLVMCodegenGlobalGetterDecl(codegen:LLVMCodegen, global_:IRGlobalDecl):pointer
+	var name = MangleGlobalGetterName(global_)
+	
+	return LLVMCreateFunctionSignature(codegen, name, IRParamList.Nil, global_.type.loc, IRType.Prim(IRPrimType.Unit))
+end
+
+function LLVMCodegenGlobalInitDecl(codegen:LLVMCodegen, global_:IRGlobalDecl):pointer
+	var name = MangleGlobalInitName(global_)
+	
+	return LLVMCreateFunctionSignature(codegen, name, IRParamList.Nil, global_.type.loc, global_.type.type)
 end
 
 function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
@@ -211,7 +317,7 @@ function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
 		case other LLVMCodegenError(codegen, loc, "prim type not implemented")
 		end
 	case ADT(adt_)
-		LLVMCodegenError(codegen, loc, "adt type not implemented")
+		return LLVMPointerType(LLVMCodegenADTDeclOpaque(codegen, adt_), 0)
 	case ADTMetaclass(decl)
 		LLVMCodegenError(codegen, loc, "meta types must not appear in the codegen")
 	case ArrayUnsized(elementType)
@@ -236,37 +342,193 @@ function count_params(params:IRParamList):i32
 	end
 end
 
-function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointer
-	var name = MangleFunctionName(fun)
-	
-	var funPtr:pointer	
-	funPtr = LLVMGetNamedFunction(codegen.module, name)
-	if funPtr <> Null() then
-		return funPtr
+function LLVMGetADTMapping(codegen:LLVMCodegen, adt_:IRADTDecl):LLVMADT
+	var list = codegen.adts
+	while true do
+		match list
+		case Nil 
+			var llvmADT = LLVMADT.New
+			llvmADT.adt_ = adt_
+			llvmADT.type = Null()
+			llvmADT.cons = LLVMADTConsList.Nil
+			codegen.adts = LLVMADTList.Cons(adt_, llvmADT, codegen.adts)
+			return llvmADT
+		case Cons(adt_1, llvmADT, tail)
+			if adt_1 == adt_ then
+				return llvmADT
+			else
+				list = tail
+			end
+		end
 	end
+end
 
-	var paramCount = count_params(fun.params)
-	var params:pointer[] = new pointer[paramCount]
+function LLVMADTGetConsMapping(codegen:LLVMCodegen, llvmADT:LLVMADT, cons:IRADTCons):LLVMADTCons
+	var list = llvmADT.cons
+	while true do
+		match list
+		case Nil 
+			var llvmCons = LLVMADTCons.New
+			llvmCons.type = Null()
+			llvmADT.cons = LLVMADTConsList.Cons(cons, llvmCons, llvmADT.cons)
+			return llvmCons
+		case Cons(cons1, llvmCons, tail)
+			if cons1 == cons then
+				return llvmCons
+			else
+				list = tail
+			end
+		end
+	end
+end
+
+function count_fields(fields:IRADTFieldList):i32
+	match fields
+	case Nil return 0
+	case Cons(field_, tail) return 1 + count_fields(tail)
+	end
+end
+
+function LLVMCodegenADTFieldTypes(codegen:LLVMCodegen, elements:pointer[], idx:i32, fields:IRADTFieldList)
+	match fields
+	case Nil return
+	case Cons(field_, tail)
+		elements[idx] = LLVMCodegenType(codegen, field_.type.loc, field_.type.type)
+		LLVMCodegenADTFieldTypes(codegen, elements, idx + 1, tail)
+	end
+end
+
+function LLVMCodegenParamTypes(codegen:LLVMCodegen, elements:pointer[], idx:i32, params:IRParamList)
+	match params
+	case Nil return
+	case Cons(param, tail)
+		elements[idx] = LLVMCodegenType(codegen, param.type.loc, param.type.type)
+		LLVMCodegenParamTypes(codegen, elements, idx + 1, tail)
+	end
+end
+
+function LLVMCodegenADTConsDecl(codegen:LLVMCodegen, cons:IRADTCons):pointer
+	var llvmADT = LLVMGetADTMapping(codegen, cons.owner)
+	var llvmCons = LLVMADTGetConsMapping(codegen, llvmADT, cons)
+	if llvmCons.type == Null() then
+		llvmCons.type = LLVMStructCreateNamed(llvm, MangleADTConsName(cons))
+		
+		var adt_ = cons.owner
+		
+		var tagCount = 1
+		var fieldsCount = count_fields(adt_.fields)
+		var paramsCount = count_params(cons.params)
+		
+		var elements:pointer[] = new pointer[tagCount + fieldsCount + paramsCount]
+		elements[0] = llvmI32Type
+		
+		LLVMCodegenADTFieldTypes(codegen, elements, 1, adt_.fields)	
+		LLVMCodegenParamTypes(codegen, elements, tagCount + fieldsCount, cons.params)
+		LLVMStructSetBody(llvmCons.type, elements, tagCount + fieldsCount + paramsCount, false)
+	end
+	
+	return llvmCons.type
+end
+
+function LLVMCodegenADTConsDecls(codegen:LLVMCodegen, list:IRADTConsList)
+	while true do
+		match list
+		case Nil return
+		case Cons(cons, tail)
+			LLVMCodegenADTConsDecl(codegen, cons)
+			LLVMCodegenADTConsBody(codegen, cons)
+			list = tail
+		end
+	end
+end
+
+function LLVMCodegenADTDeclOpaque(codegen:LLVMCodegen, adt_:IRADTDecl):pointer
+	var llvmADT = LLVMGetADTMapping(codegen, adt_)
+	if llvmADT.type == Null() then
+		llvmADT.type = LLVMStructCreateNamed(llvm, MangleADTName(adt_))
+		llvmADT.opaque = true
+	end
+	
+	return llvmADT.type
+end
+
+function LLVMCodegenADTDeclFull(codegen:LLVMCodegen, adt_:IRADTDecl):pointer
+	var llvmADT = LLVMGetADTMapping(codegen, adt_)
+	LLVMCodegenADTDeclOpaque(codegen, adt_)
+	if llvmADT.opaque then
+		llvmADT.opaque = false
+		
+		--tag (i32)
+		--fields
+		var tagCount = 1
+		var fieldsCount = count_fields(adt_.fields)
+		
+		var elements:pointer[] = new pointer[tagCount + fieldsCount]
+		elements[0] = llvmI32Type
+		
+		LLVMCodegenADTFieldTypes(codegen, elements, 1, adt_.fields)	
+		LLVMStructSetBody(llvmADT.type, elements, tagCount + fieldsCount, false)
+	end	
+	return llvmADT.type
+end
+
+function LLVMCodegenADTConsBody(codegen:LLVMCodegen, cons:IRADTCons)
+	var llvmFun = LLVMCodegenConsFunctionDecl(codegen, cons)
+	var llvmCons = LLVMCodegenADTConsDecl(codegen, cons)
+	
+	var bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
+	
+	LLVMPositionBuilderAtEnd(codegen.builder, bb)
+	
+	var elements:pointer[] = new pointer[1]
+	elements[0] = LLVMConstTrunc(LLVMSizeOf(llvmCons), llvmI32Type)
+	
+	var alloc = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicAlloc), elements, 1, "")
+	var obj = LLVMBuildBitCast(codegen.builder, alloc, LLVMPointerType(llvmCons, 0), "")
+	
+	LLVMBuildStore(codegen.builder, LLVMConstInt_wrap(llvmI32Type, cons.index, true), LLVMBuildStructGEP(codegen.builder, obj, 0, ""))
+	
+	var n = count_params(cons.params)
+	var i = 0
+	while i < n do
+		LLVMBuildStore(codegen.builder, LLVMGetParam(llvmFun, i), LLVMBuildStructGEP(codegen.builder, obj, i + 1, ""))
+		i = i + 1
+	end
+	
+	LLVMBuildRet(codegen.builder, obj)
+end
+
+function LLVMCreateFunctionSignature(codegen:LLVMCodegen, name:string, params:IRParamList, retTyLoc:SrcLoc, retTy:IRType):pointer
+	if name <> "" then			
+		var funPtr:pointer	
+		funPtr = LLVMGetNamedFunction(codegen.module, name)
+		if funPtr <> Null() then
+			return funPtr
+		end
+	end
+	
+	var paramCount = count_params(params)
+	var paramTypes:pointer[] = new pointer[paramCount]
 	
 	var i = 0
-	var paramList = fun.params
+	var paramList = params
 	while i < paramCount do
 		match paramList
 		case Cons(param, tail)
 			paramList = tail
-			params[i] = LLVMCodegenType(codegen, param.type.loc, param.type.type)
+			paramTypes[i] = LLVMCodegenType(codegen, param.type.loc, param.type.type)
 		end
 		i = i + 1
 	end
 	
-	var retTy = LLVMCodegenType(codegen, fun.retTy.loc, fun.retTy.type)
+	var retTy = LLVMCodegenType(codegen, retTyLoc, retTy)
 	
-	var funTy = LLVMFunctionType(retTy, params, paramCount, false)
+	var funTy = LLVMFunctionType(retTy, paramTypes, paramCount, false)
 	
 	var llvmFun = LLVMAddFunction(codegen.module, name, funTy)
 	
 	i = 0
-	paramList = fun.params
+	paramList = params
 	while i < paramCount do
 		match paramList
 		case Cons(param, tail)
@@ -278,6 +540,29 @@ function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointe
 	end
 	
 	return llvmFun
+end
+
+function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointer
+	var name = MangleFunctionName(fun)
+	
+	var funPtr:pointer	
+	funPtr = LLVMGetNamedFunction(codegen.module, name)
+	if funPtr <> Null() then
+		return funPtr
+	end
+
+	return LLVMCreateFunctionSignature(codegen, name, fun.params, fun.retTy.loc, fun.retTy.type)
+end
+
+function LLVMCodegenConsFunctionDecl(codegen:LLVMCodegen, constr:IRADTCons):pointer
+	var name = MangleADTConsFunctionName(constr)
+	var funPtr:pointer	
+	funPtr = LLVMGetNamedFunction(codegen.module, name)
+	if funPtr <> Null() then
+		return funPtr
+	end
+	
+	return LLVMCreateFunctionSignature(codegen, name, constr.params, constr.owner.symbol.loc, constr.owner.selfType)
 end
 
 function LLVMCodegenGetIntrinsic(codegen:LLVMCodegen, info:IntrinsicInfo):pointer
@@ -301,10 +586,10 @@ function LLVMCodegenFunction(codegen:LLVMCodegen, fun:IRFunctionDecl)
 	codegen.llvmFun = llvmFun
 	LLVMCodegenCaptureParams(codegen, fun, llvmFun)
 	
-	var builder = LLVMCreateBuilderInContext(llvm)
+	var builder = codegen.builder
 	var bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
 	LLVMPositionBuilderAtEnd(builder, bb)
-	codegen.builder = builder
+	
 	
 	match fun.body
 	case Block(block)
@@ -521,10 +806,12 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			instr.llvmRef = val
 		case ReadGlobal(global_)
 			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
+			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), Null(), 0, "")
 			var val = LLVMBuildLoad(codegen.builder, globalVar, "")
 			instr.llvmRef = val
 		case WriteGlobal(global_, value)
 			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
+			LLVMBuildCall(codegen.builder, LLVMCodegenGlobalGetterDecl(codegen, global_), Null(), 0, "")
 			LLVMBuildStore(codegen.builder, LLVMCodegenGetValue(codegen, value), globalVar)
 		case Unreachable
 			LLVMBuildUnreachable(codegen.builder)
@@ -552,6 +839,18 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			codegen.latePhi = LatePHIList.Cons(llvmPHI, phi, codegen.latePhi)
 			
 			instr.llvmRef = llvmPHI
+		case ArrayRead(array, idx)
+			var ptr = LLVMCodegenGetValue(codegen, array)
+			var indices:pointer[] = new pointer[1]
+			indices[0] = LLVMCodegenGetValue(codegen, idx)
+			var gep = LLVMBuildInBoundsGEP(codegen.builder, ptr, indices, 1, "")
+			instr.llvmRef = LLVMBuildLoad(codegen.builder, gep, "")
+		case ArrayWrite(array, idx, val)
+			var ptr = LLVMCodegenGetValue(codegen, array)
+			var indices:pointer[] = new pointer[1]
+			indices[0] = LLVMCodegenGetValue(codegen, idx)
+			var gep = LLVMBuildInBoundsGEP(codegen.builder, ptr, indices, 1, "")
+			LLVMBuildStore(codegen.builder, LLVMCodegenGetValue(codegen, val), gep)
 		case CallIntrinsic(intrin, args)
 			match LLVMCodegenValues(codegen, args)
 			case Args(argCount, argArray)
@@ -567,6 +866,11 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 					case Multiply
 						instr.llvmRef = LLVMBuildMul(codegen.builder, argArray[0], argArray[1], "")
 					end
+				case NewArray(elTy)
+					var llvmElTy = LLVMCodegenType(codegen, GetDbgLoc(instr.dbg), elTy)
+					argArray[0] = LLVMBuildMul(codegen.builder, argArray[0], LLVMConstTrunc(LLVMSizeOf(llvmElTy), llvmI32Type), "")
+					var mem = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicAlloc), argArray, argCount, "")
+					instr.llvmRef = LLVMBuildBitCast(codegen.builder, mem, LLVMPointerType(llvmElTy, 0), "")
 				case StringConcat
 					instr.llvmRef = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringConcat), argArray, argCount, "")
 				case CompareBool(cmp)
@@ -576,12 +880,41 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 				case ComparePointer(cmp)
 					var diff = LLVMBuildPtrDiff(codegen.builder, argArray[0], argArray[1], "")
 					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+				case CompareRefEq(cmp)
+					var diff = LLVMBuildPtrDiff(
+						codegen.builder, 
+						LLVMBuildBitCast(codegen.builder, argArray[0], llvmPtrType, ""), 
+						LLVMBuildBitCast(codegen.builder, argArray[1], llvmPtrType, ""),
+						""
+					)
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
 				case CompareString(cmp)
 					var diff = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringCmp), argArray, argCount, "")
 					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
 				case other
 					LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "intrinsic not implemented")
 				end
+			end
+		case ReadADTField(ptr, field_)
+			LLVMCodegenADTDeclFull(codegen, field_.owner)
+			instr.llvmRef = LLVMBuildLoad(
+				codegen.builder,
+				LLVMBuildStructGEP(codegen.builder, LLVMCodegenGetValue(codegen, ptr), 1 + field_.index, ""), 
+				""
+			)
+		case WriteADTField(ptr, field_, val)
+			LLVMCodegenADTDeclFull(codegen, field_.owner)
+			LLVMBuildStore(
+				codegen.builder, 
+				LLVMCodegenGetValue(codegen, val), 
+				LLVMBuildStructGEP(codegen.builder, LLVMCodegenGetValue(codegen, ptr), 1 + field_.index, "")
+			)
+		case CallConstructor(constr, args)
+			var llvmFun = LLVMCodegenConsFunctionDecl(codegen, constr)
+			
+			match LLVMCodegenValues(codegen, args)
+			case Args(argCount, argArray)
+				instr.llvmRef = LLVMBuildCall(codegen.builder, llvmFun, argArray, argCount, "")
 			end
 		case CallFunction(fun, args)
 			var llvmFun = LLVMCodegenFunctionDecl(codegen, fun)

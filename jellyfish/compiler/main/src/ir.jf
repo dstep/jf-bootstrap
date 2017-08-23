@@ -4,6 +4,7 @@ import main.ast_type
 import main.ast_stmt
 import main.prelude
 import main.bytecode
+import main.llvm_codegen
 
 adt IRImport
 	New
@@ -78,6 +79,7 @@ adt IRADTField
 	field name:string
 	field loc:SrcLoc
 	field type:IRTypeNode
+	field index:i32
 end
 
 adt IRADTFieldList
@@ -93,6 +95,18 @@ adt IRADTCons
 	field name:string
 	field loc:SrcLoc
 	field params:IRParamList
+	
+	field type:IRType
+end
+
+adt MaybeIRADTCons
+	Nothing
+	Just(constr:IRADTCons)
+end
+
+adt MaybeIRADTField
+	Nothing
+	Just(field_:IRADTField)
 end
 
 adt IRADTConsList
@@ -134,7 +148,7 @@ adt IRExprNode
 	
 	field loc:SrcLoc
 	field ast:AstExpr
-	
+	field frame:FunctionFrame
 end
 
 adt IRPrimType
@@ -264,3 +278,32 @@ function IRUnitInsertFile(unit_:IRCompilationUnit, file:IRSourceFile)
 		end
 	end
 end
+
+function IRADTFindConstructor(adt_:IRADTDecl, name:string):MaybeIRADTCons
+	var cons = adt_.cons
+	while true do
+		match cons
+		case Nil return MaybeIRADTCons.Nothing
+		case Cons(const, tail)
+			if const.name == name then
+				return MaybeIRADTCons.Just(const)
+			end
+			cons = tail
+		end
+	end
+end
+
+function IRADTFindField(adt_:IRADTDecl, name:string):MaybeIRADTField
+	var fields = adt_.fields
+	while true do
+		match fields
+		case Nil return MaybeIRADTField.Nothing
+		case Cons(field_, tail)
+			if field_.name == name then
+				return MaybeIRADTField.Just(field_)
+			end
+			fields = tail
+		end
+	end
+end
+

@@ -193,7 +193,7 @@ function BCompileSymbol(bc:BCCompiler, symbol:IRSymbol)
 	case ADT(adt_)
 		--do nothing for adt yet
 	case Global(global_)
-		--do nothing for globals yet
+		BCCompileGlobal(bc, global_)
 	case Function(fun)
 		BCCompileFunction(bc, fun)
 	case other
@@ -242,6 +242,22 @@ function BCCompileFunction(bc:BCCompiler, fun:IRFunctionDecl)
 		
 		BCLeaveFunction(bc)
 	end
+end
+
+function BCCompileGlobal(bc:BCCompiler, global_:IRGlobalDecl)
+	bc.retTy = global_.type.type
+	
+	var frame = FunctionFrameCreate()
+	global_.expr.frame = frame
+	BCEnterFrame(bc, frame)		
+	
+	var scope = BCCompilerEnterScope(bc)
+	
+	var val = BCCompileExprAs(bc, global_.expr.ast, global_.type.type)
+	BCBuilderReturn(bc.builder, val)
+	
+	BCCompilerLeaveScope(bc)	
+	BCLeaveFrame(bc)	
 end
 
 function BCEnterFuction(bc:BCCompiler, fun:IRFunctionDecl)
@@ -383,6 +399,10 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			BCBuilderWriteVariable(bc.builder, var_, val)
 		case Global(global_)
 			BCBuilderWriteGlobal(bc.builder, global_, val)
+		case ADTField(ptr, field_)
+			BCBuilderWriteADTField(bc.builder, ptr, field_, val)
+		case ArrayIndex(array, idx, type)
+			BCBuilderArrayWrite(bc.builder, array, idx, val)
 		case other
 			BCCompilerError(bc, ast.loc, "reference type is not implemented")
 		end
@@ -515,8 +535,51 @@ function BCCompileWritableReference(bc:BCCompiler, ast:AstExpr):WritableReferenc
 		case other
 			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
 		end
+	case Index(lhs, rhs)
+		var ref = BCCompileIndexableReference(bc, lhs)
+		match ref
+		case Value(val)
+			match ValueRefGetType(val)
+			case ArrayUnsized(elTy)
+				var idx = BCCompileExprAs(bc, rhs, IRType.Prim(IRPrimType.I32))
+				return WritableReference.ArrayIndex(val, idx, elTy)
+			case other BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+			end			
+		case other
+			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+		end
+	case Dot(lhs, id)
+		var ref = BCCompileIndexableReference(bc, lhs)
+		match ref
+		case Value(val)
+			match ValueRefGetType(val)
+			case ADT(adt_)
+				match IRADTFindField(adt_, id)
+				case Nothing BCCompilerError(bc, ast.loc, "no such field")
+				case Just(field_)
+					return WritableReference.ADTField(val, field_)
+				end
+			case other BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+			end			
+		case other
+			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+		end
 	case other BCCompilerError(bc, ast.loc, "expression is not implemented as a writable reference") 
 	end
+end
+
+function BCCompileIndexableReference(bc:BCCompiler, ast:AstExpr):IndexableRef
+	Loc(bc, ast.loc)
+	match ast
+	case Id(id)
+		var ref = BCCompilerResolveRef(bc, ast.loc, id)
+		match ref
+		case Global(symbol)
+			return IndexableRef.Symbol(symbol)
+		end
+	end
+	
+	return IndexableRef.Value(BCCompileExprNoHint(bc, ast))
 end
 
 function BCCompileCallableReference(bc:BCCompiler, ast:AstExpr, m_ret_type:MaybeIRType):CallableRef
@@ -535,6 +598,24 @@ function BCCompileCallableReference(bc:BCCompiler, ast:AstExpr, m_ret_type:Maybe
 		case other
 			BCCompilerError(bc, ast.loc, "calling this reference is not implemented")
 		end
+	case Dot(lhs, id)
+		var ref = BCCompileIndexableReference(bc, lhs)
+		match ref
+		case Symbol(symbol)
+			match symbol
+			case ADT(adt_)
+				var m_cons = IRADTFindConstructor(adt_, id)
+				match m_cons
+				case Nothing BCCompilerError(bc, ast.loc, "adt constructor not found")
+				case Just(cons)
+					return CallableRef.ADTConstructor(cons)
+				end
+			case other
+				BCCompilerError(bc, ast.loc, "indexing this symbol reference is not implemented")
+			end
+		case other
+			BCCompilerError(bc, ast.loc, "indexing this reference is not implemented")
+		end
 	case other BCCompilerError(bc, ast.loc, "expression is not implemented as a callable reference")
 	end
 end
@@ -548,6 +629,27 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 	case StringLit(content)
 		var str = DecodeStr(content)
 		return ValueRef.ConstString(str, IRType.Prim(IRPrimType.String))
+	case New(ty)
+		match BCResolveType(bc, ty)
+		case ArraySized(elTy, size)
+			var sizeVal = BCCompileExprAs(bc, size.ast, IRType.Prim(IRPrimType.I32))
+			return BCBuilderCallIntrinsic(bc.builder, Intrinsic.NewArray(elTy), ValueRefList.Cons(sizeVal, ValueRefList.Nil), IRType.ArrayUnsized(elTy))
+		case other
+			BCCompilerError(bc, ast.loc, "'new' is only available for sized arrays")
+		end
+	case Index(lhs, rhs)
+		var ref = BCCompileIndexableReference(bc, lhs)
+		match ref
+		case Value(val)
+			match ValueRefGetType(val)
+			case ArrayUnsized(elTy)
+				var idx = BCCompileExprAs(bc, rhs, IRType.Prim(IRPrimType.I32))
+				return BCBuilderArrayRead(bc.builder, val, idx, elTy)
+			case other BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+			end			
+		case other
+			BCCompilerError(bc, ast.loc, "writing to this reference is not implemented")
+		end
 	case Id(id)
 		if id == "true" then
 			return ValueRef.ConstBool(true, IRType.Prim(IRPrimType.Bool)) 
@@ -570,6 +672,38 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 			end
 		case other
 			BCCompilerError(bc, ast.loc, "reading this reference is not implemented")
+		end
+	case Dot(lhs, id)
+		var ref = BCCompileIndexableReference(bc, lhs)
+		match ref
+		case Symbol(symbol)
+			match symbol
+			case ADT(adt_)
+				var m_cons = IRADTFindConstructor(adt_, id)
+				match m_cons
+				case Nothing BCCompilerError(bc, ast.loc, "adt constructor not found")
+				case Just(cons)
+					match cons.type		
+					case Function(retTy, params)
+						var args = BCCompileArgs(bc, ast.loc, AstExprList.Nil, params)
+						return BCBuilderCallConstructor(bc.builder, cons, args, retTy)
+					end
+				end
+			case other
+				BCCompilerError(bc, ast.loc, "indexing this symbol reference is not implemented")
+			end
+		case Value(val)
+			match ValueRefGetType(val)
+			case ADT(adt_)
+				match IRADTFindField(adt_, id)
+				case Nothing BCCompilerError(bc, ast.loc, "no such field")
+				case Just(field_)
+					return BCBuilderReadADTField(bc.builder, val, field_)
+				end
+			case other BCCompilerError(bc, ast.loc, "indexing this reference is not implemented")
+			end
+		case other
+			BCCompilerError(bc, ast.loc, "indexing this reference is not implemented")
 		end
 	case BinOp(lhs, op, rhs)
 		var opId:i32 = 0
@@ -629,6 +763,9 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 						ok = true
 						intrinsic = Intrinsic.ComparePointer(cmpOp)
 					end
+				case ADT(adt_)
+					ok = true
+					intrinsic = Intrinsic.CompareRefEq(cmpOp)
 				end
 				
 				if ok then
@@ -692,12 +829,14 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 	case Call(head, args)
 		var head_val = BCCompileCallableReference(bc, head, m_type)
 		var type = CallableRefGetType(head_val)
-		match type
+		match type		
 		case Function(retTy, params)
 			var args = BCCompileArgs(bc, ast.loc, args, params)
 			match head_val
 			case Function(fun)
 				return BCBuilderCallFunction(bc.builder, fun, args, retTy)
+			case ADTConstructor(cons)
+				return BCBuilderCallConstructor(bc.builder, cons, args, retTy)
 			case other
 				BCCompilerError(bc, head.loc, "callable ref not implemented")
 			end

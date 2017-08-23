@@ -19,6 +19,7 @@ import main.llvm_codegen
 --ir compiler +
 --bytecode builder
 --codegen
+	-- match
 
 global Compiler:CompilerContext = CompilerContextCreate()
 

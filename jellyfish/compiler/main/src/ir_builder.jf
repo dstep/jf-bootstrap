@@ -112,7 +112,7 @@ function IRBuildSymbol(builder:IRBuilder, tld:AstTopLevel)
 		adt_.symbol = IRSymbol.ADT(adt_)
 		IRBuilderInsertSymbol(builder, BinderGetName(name), tld.loc, adt_.symbol)
 		
-		adt_.fields = IRBuildADTFields(builder, adt_, fields)
+		adt_.fields = IRBuildADTFields(builder, adt_, fields, 0)
 		adt_.cons = IRBuildADTConstructors(builder, adt_, cons, 0)
 	case Function(name, params, retTy, body)
 		var fun = IRFunctionDecl.New
@@ -179,7 +179,7 @@ function IRBuildParamList(builder:IRBuilder, params:AstParamList):IRParamList
 	end
 end
 
-function IRBuildADTFields(builder:IRBuilder, adt_:IRADTDecl, fields:AstADTFieldsList):IRADTFieldList
+function IRBuildADTFields(builder:IRBuilder, adt_:IRADTDecl, fields:AstADTFieldsList, idx:i32):IRADTFieldList
 	match fields 
 	case Nil return IRADTFieldList.Nil
 	case Cons(ast, tail)
@@ -190,8 +190,9 @@ function IRBuildADTFields(builder:IRBuilder, adt_:IRADTDecl, fields:AstADTFields
 			field_.name = name
 			field_.loc = loc
 		end			
+		field_.index = idx
 		field_.type = IRBuildTypeNode(builder, ast.type)
-		return IRADTFieldList.Cons(field_, IRBuildADTFields(builder, adt_, tail))
+		return IRADTFieldList.Cons(field_, IRBuildADTFields(builder, adt_, tail, idx + 1))
 	end
 end
 

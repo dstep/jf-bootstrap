@@ -22,11 +22,13 @@ function LLVMSetValueName(value:pointer, name:string) import "LLVMSetValueName"
 
 function LLVMGetElementType(type:pointer):pointer import "LLVMGetElementType"
 
+function LLVMStructCreateNamed(context:pointer, name:string):pointer import "LLVMStructCreateNamed"
+function LLVMStructSetBody(structType:pointer, elements:pointer[], elementCount:i32, packed:bool) import "LLVMStructSetBody"
+
 -- Globals
 function LLVMAddGlobal(module:pointer, type:pointer, name:string):pointer import "LLVMAddGlobal"
 function LLVMGetNamedGlobal(module:pointer, name:string):pointer import "LLVMGetNamedGlobal"
 function LLVMGetNamedFunction(module:pointer, name:string):pointer import "LLVMGetNamedFunction"
-
 
 function LLVMSetLinkage(value:pointer, linkage:i32) import "LLVMSetLinkage"
 
@@ -66,7 +68,11 @@ function LLVMBuildSDiv(builder:pointer, lhs:pointer, rhs:pointer, name:string):p
 function LLVMBuildICmp(builder:pointer, op:i32, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildICmp"
 function LLVMBuildPtrDiff(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildPtrDiff"
 
+function LLVMBuildStructGEP(builder:pointer, ptr:pointer, idx:i32, name:string):pointer import "LLVMBuildStructGEP"
 
+function LLVMBuildBitCast(builder:pointer, value:pointer, type:pointer, name:string):pointer import "LLVMBuildBitCast"
+
+function LLVMBuildInBoundsGEP(builder:pointer, value:pointer, indices:pointer[], numIndices:i32, name:string):pointer import "LLVMBuildInBoundsGEP"
 
 -- Values
 function LLVMTypeOf(value:pointer):pointer import "LLVMTypeOf"
@@ -75,7 +81,9 @@ function LLVMAddIncoming(phi:pointer, values:pointer[], bbs:pointer[], count:i32
 -- Constants
 function LLVMConstInt_wrap(type:pointer, n:i32, sign:bool):pointer import "LLVMConstInt_wrap"
 function LLVMConstStringInContext(context:pointer, str:string, length:i32, dontNullTerminate:bool):pointer import "LLVMConstStringInContext"
-
+function LLVMSizeOf(type:pointer):pointer import "LLVMSizeOf"
+function LLVMConstTrunc(const:pointer, type:pointer):pointer import "LLVMConstTrunc"
+function LLVMGetUndef(type:pointer):pointer import "LLVMGetUndef"
 -- Constant Expr
 
 function LLVMConstBitCast(const:pointer, type:pointer):pointer import "LLVMConstBitCast"

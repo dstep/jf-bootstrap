@@ -111,6 +111,8 @@ function IRCompileADTConstructors(compiler:IRCompiler, cons:IRADTConsList)
 			cons = tail
 			
 			IRCompileParamList(compiler, constr.params)
+			
+			constr.type = IRType.Function(constr.owner.selfType, IRCompileParamListToTypeList(compiler, constr.params)) 
 		end
 	end
 end

@@ -39,6 +39,11 @@ function BCBuilderWriteGlobal(builder:BCBuilder, global_:IRGlobalDecl, val:Value
 	BCBuilderInsert(builder, ins, IRType.Prim(IRPrimType.Unit))
 end
 
+function BCBuilderWriteADTField(builder:BCBuilder, ptr:ValueRef, field_:IRADTField, val:ValueRef)
+	var ins = Instruction.WriteADTField(ptr, field_, val)
+	BCBuilderInsert(builder, ins, IRType.Prim(IRPrimType.Unit))
+end
+
 function BCBuilderReadVariable(builder:BCBuilder, var_:Variable):ValueRef
 	var ins = Instruction.ReadVariable(var_)
 	BCBuilderInsert(builder, ins, var_.type)
@@ -48,6 +53,12 @@ end
 function BCBuilderReadGlobal(builder:BCBuilder, global_:IRGlobalDecl):ValueRef
 	var ins = Instruction.ReadGlobal(global_)
 	BCBuilderInsert(builder, ins, global_.type.type)
+	return ins.value
+end
+
+function BCBuilderReadADTField(builder:BCBuilder, ptr:ValueRef, field_:IRADTField):ValueRef
+	var ins = Instruction.ReadADTField(ptr, field_)
+	BCBuilderInsert(builder, ins, field_.type.type)
 	return ins.value
 end
 
@@ -63,6 +74,11 @@ function BCBuilderCallIntrinsic(builder:BCBuilder, intr:Intrinsic, args:ValueRef
 	return ins.value
 end
 
+function BCBuilderCallConstructor(builder:BCBuilder, cons:IRADTCons, args:ValueRefList, type:IRType):ValueRef
+	var ins = Instruction.CallConstructor(cons, args)
+	BCBuilderInsert(builder, ins, type)
+	return ins.value
+end
 
 function BCBuilderPHI(builder:BCBuilder, type:IRType, phi:PHIList):ValueRef
 	var ins = Instruction.PHI(phi)
@@ -81,3 +97,16 @@ end
 function BCBuilderCondJump(builder:BCBuilder, cond:ValueRef, then_:BasicBlock, else_:BasicBlock)
 	BCBuilderInsert(builder, Instruction.CondJump(cond, then_, else_), IRType.Prim(IRPrimType.Unit))
 end
+
+
+function BCBuilderArrayWrite(builder:BCBuilder, array:ValueRef, idx:ValueRef, value:ValueRef)
+	var ins = Instruction.ArrayWrite(array, idx, value)
+	BCBuilderInsert(builder, ins, IRType.Prim(IRPrimType.Unit))
+end
+
+function BCBuilderArrayRead(builder:BCBuilder, array:ValueRef, idx:ValueRef, type:IRType):ValueRef
+	var ins = Instruction.ArrayRead(array, idx)
+	BCBuilderInsert(builder, ins, type)
+	return ins.value
+end
+
