@@ -2,6 +2,8 @@ function LLVMContextCreate():pointer import "LLVMContextCreate"
 function LLVMModuleCreateWithNameInContext(name:string, content:pointer):pointer import "LLVMModuleCreateWithNameInContext"
 function LLVMPrintModuleToString(module:pointer):string import "LLVMPrintModuleToString"
 
+-- Types
+
 function LLVMPointerType(elementType:pointer, address:i32):pointer import "LLVMPointerType"
 
 function LLVMInt1TypeInContext(context:pointer):pointer import "LLVMInt1TypeInContext"
@@ -18,9 +20,13 @@ function LLVMGetParam(func:pointer, idx:i32):pointer import "LLVMGetParam"
 
 function LLVMSetValueName(value:pointer, name:string) import "LLVMSetValueName"
 
+function LLVMGetElementType(type:pointer):pointer import "LLVMGetElementType"
+
 -- Globals
 function LLVMAddGlobal(module:pointer, type:pointer, name:string):pointer import "LLVMAddGlobal"
 function LLVMGetNamedGlobal(module:pointer, name:string):pointer import "LLVMGetNamedGlobal"
+function LLVMGetNamedFunction(module:pointer, name:string):pointer import "LLVMGetNamedFunction"
+
 
 function LLVMSetLinkage(value:pointer, linkage:i32) import "LLVMSetLinkage"
 
@@ -30,6 +36,8 @@ function LLVMSetInitializer(variable:pointer, value:pointer) import "LLVMSetInit
 function LLVMGetEntryBasicBlock(func:pointer):pointer import "LLVMGetEntryBasicBlock"
 
 function LLVMAppendBasicBlockInContext(context:pointer, func:pointer, name:string):pointer import "LLVMAppendBasicBlockInContext"
+
+function LLVMGetBasicBlockTerminator(bb:pointer):pointer import "LLVMGetBasicBlockTerminator"
 
 --IR Builder
 function LLVMCreateBuilderInContext(context:pointer):pointer import "LLVMCreateBuilderInContext"
@@ -47,9 +55,23 @@ function LLVMBuildCondBr(builder:pointer, if_:pointer, then_:pointer, else_:poin
 function LLVMBuildRetVoid(builder:pointer):pointer import "LLVMBuildRetVoid"
 function LLVMBuildRet(builder:pointer, value:pointer):pointer import "LLVMBuildRet"
 
+function LLVMBuildCall(builder:pointer, fun:pointer, args:pointer[], argCount:i32, name:string):pointer import "LLVMBuildCall" 
+function LLVMBuildPhi(builder:pointer, type:pointer, name:string):pointer import "LLVMBuildPhi"
+
+function LLVMBuildAdd(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildAdd"
+function LLVMBuildSub(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildSub"
+function LLVMBuildMul(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildMul"
+function LLVMBuildSDiv(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildSDiv"
+
+function LLVMBuildICmp(builder:pointer, op:i32, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildICmp"
+function LLVMBuildPtrDiff(builder:pointer, lhs:pointer, rhs:pointer, name:string):pointer import "LLVMBuildPtrDiff"
+
+
+
 -- Values
 function LLVMTypeOf(value:pointer):pointer import "LLVMTypeOf"
 
+function LLVMAddIncoming(phi:pointer, values:pointer[], bbs:pointer[], count:i32) import "LLVMAddIncoming"
 -- Constants
 function LLVMConstInt_wrap(type:pointer, n:i32, sign:bool):pointer import "LLVMConstInt_wrap"
 function LLVMConstStringInContext(context:pointer, str:string, length:i32, dontNullTerminate:bool):pointer import "LLVMConstStringInContext"
@@ -61,3 +83,5 @@ function LLVMConstBitCast(const:pointer, type:pointer):pointer import "LLVMConst
 -- Enums
 
 function LLVMPrivateLinkage():i32 import "jfprelude_LLVMPrivateLinkage"
+
+function LLVMDumpValue(val:pointer) import "LLVMDumpValue"

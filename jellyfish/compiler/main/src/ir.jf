@@ -42,6 +42,8 @@ adt IRFunctionDecl
 	field params:IRParamList
 	field retTy:IRTypeNode
 	
+	field type:IRType
+	
 	field body:IRFunctionBody
 end
 
@@ -171,6 +173,12 @@ adt IRType
 	ADTMetaclass(decl:IRADTDecl)
 	ArrayUnsized(elementType:IRType)
 	ArraySized(elementType:IRType, size:IRExprNode)
+	Function(retTy:IRType, list:IRTypeList)
+end
+
+adt IRTypeList
+	Nil
+	Cons(type:IRType, tail:IRTypeList)
 end
 
 adt MaybeIRType

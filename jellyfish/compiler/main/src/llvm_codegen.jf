@@ -15,6 +15,11 @@ adt VarToValue
 	Cons(var_:Variable, value:pointer, tail:VarToValue)
 end
 
+adt LatePHIList
+	Nil
+	Cons(llvmPhi:pointer, phi:PHIList, tail:LatePHIList)
+end
+
 adt LLVMCodegen
 	New
 	
@@ -27,9 +32,44 @@ adt LLVMCodegen
 	
 	field params:ParamToValue
 	field vars:VarToValue
+	
+	field latePhi:LatePHIList
+end
+
+adt IntrinsicInfo
+	New
+	
+	field name:string
+	field ret:pointer
+	field params:pointer[]
+	field paramsCount:i32
 end
 
 global llvm:pointer = LLVMContextCreate()
+
+global llvmStringType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
+global llvmI32Type:pointer = LLVMInt32TypeInContext(llvm)
+
+global IntrinsicStringConcat:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_concat", 2, llvmStringType, llvmStringType, llvmStringType)
+global IntrinsicStringCmp:IntrinsicInfo = IntrinsicInfoCreate2("jf_string_compare", 2, llvmI32Type, llvmStringType, llvmStringType)
+
+
+
+function IntrinsicInfoCreate(name:string, count:i32, ret:pointer):IntrinsicInfo
+	var info = IntrinsicInfo.New
+	info.name = name
+	info.ret = ret
+	info.params = new pointer[count]
+	info.paramsCount = count
+	return info
+end
+
+function IntrinsicInfoCreate2(name:string, count:i32, ret:pointer, p1:pointer, p2:pointer):IntrinsicInfo
+	var info = IntrinsicInfoCreate(name, count, ret)
+	info.params[0] = p1
+	info.params[1] = p2
+	return info
+end
 
 function RunLLVMCodegen(context:CompilerContext)
 	LLVMCodegenUnits(context, context.units)
@@ -133,6 +173,10 @@ function MangleGlobalName(global_:IRGlobalDecl):string
 end
 
 function MangleFunctionName(fun:IRFunctionDecl):string
+	if fun.symbol.owner.unit_.name == "main.test" and fun.symbol.name == "run" then
+		return "_jf_entry_point"
+	end
+	
 	return MangleUnitName(fun.symbol.owner.unit_) + ".fn." + fun.symbol.name
 end
 
@@ -161,7 +205,7 @@ function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
 		match prim
 		case Unit return LLVMVoidTypeInContext(llvm)
 		case I32 return LLVMInt32TypeInContext(llvm)
-		case String return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
+		case String llvmStringType
 		case Pointer return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 		case Bool return LLVMInt1TypeInContext(llvm)
 		case other LLVMCodegenError(codegen, loc, "prim type not implemented")
@@ -193,6 +237,14 @@ function count_params(params:IRParamList):i32
 end
 
 function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointer
+	var name = MangleFunctionName(fun)
+	
+	var funPtr:pointer	
+	funPtr = LLVMGetNamedFunction(codegen.module, name)
+	if funPtr <> Null() then
+		return funPtr
+	end
+
 	var paramCount = count_params(fun.params)
 	var params:pointer[] = new pointer[paramCount]
 	
@@ -211,7 +263,7 @@ function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointe
 	
 	var funTy = LLVMFunctionType(retTy, params, paramCount, false)
 	
-	var llvmFun = LLVMAddFunction(codegen.module, MangleFunctionName(fun), funTy)
+	var llvmFun = LLVMAddFunction(codegen.module, name, funTy)
 	
 	i = 0
 	paramList = fun.params
@@ -225,6 +277,20 @@ function LLVMCodegenFunctionDecl(codegen:LLVMCodegen, fun:IRFunctionDecl):pointe
 		i = i + 1
 	end
 	
+	return llvmFun
+end
+
+function LLVMCodegenGetIntrinsic(codegen:LLVMCodegen, info:IntrinsicInfo):pointer
+	var name = info.name
+	
+	var funPtr:pointer	
+	funPtr = LLVMGetNamedFunction(codegen.module, name)
+	if funPtr <> Null() then
+		return funPtr
+	end
+	
+	var funTy = LLVMFunctionType(info.ret, info.params, info.paramsCount, false)
+	var llvmFun = LLVMAddFunction(codegen.module, name, funTy)
 	return llvmFun
 end
 
@@ -244,13 +310,29 @@ function LLVMCodegenFunction(codegen:LLVMCodegen, fun:IRFunctionDecl)
 	case Block(block)
 		LLVMCodegenFunctionFrame(codegen, block.frame)
 	case FFIImport(text)
-		LLVMCodegenError(codegen, fun.body.loc, "ffi not implemented")
+		var argCount = count_params(fun.params)
+		var argArray:pointer[] = new pointer[argCount]
+		
+		var i = 0
+		while i < argCount do
+			argArray[i] = LLVMGetParam(llvmFun, i)
+			i = i + 1
+		end
+	
+		var proxy = LLVMAddFunction(codegen.module, DecodeStr(text), LLVMGetElementType(LLVMTypeOf(llvmFun)))
+		var ret = LLVMBuildCall(builder, proxy, argArray, argCount, "")
+		if IsVoidType(fun.retTy.type) then
+			LLVMBuildRetVoid(builder)
+		else
+			LLVMBuildRet(builder, ret)
+		end
 	end
 end
 
 function LLVMCodegenClearState(codegen:LLVMCodegen)
 	codegen.vars = VarToValue.Nil
 	codegen.params = ParamToValue.Nil
+	codegen.latePhi = LatePHIList.Nil
 end
 
 function LLVMCodegenCaptureParams(codegen:LLVMCodegen, fun:IRFunctionDecl, llvmFun:pointer)
@@ -278,6 +360,38 @@ function LLVMCodegenFunctionFrame(codegen:LLVMCodegen, frame:FunctionFrame)
 	LLVMBuildBr(codegen.builder, frame.entry.llvmRef)
 	
 	LLMVCodegenBasicBlocks(codegen, frame.blocks)
+	
+	LLVMCodegenLatePHI(codegen)
+end
+
+function LLVMCodegenLatePHI(codegen:LLVMCodegen)
+	var latePhi = codegen.latePhi
+	while true do
+		match latePhi
+		case Nil return
+		case Cons(llvmPHI, phi, tail)
+			latePhi = tail
+			
+			var count = count_phi(phi)
+			var values:pointer[] = new pointer[count]
+			var bbs:pointer[] = new pointer[count]
+			
+			var phiList = phi
+			var i = 0
+			while i < count do				
+				match phiList
+				case Cons(block, value, tail)
+					values[i] = LLVMCodegenGetValue(codegen, value)
+					bbs[i] = block.llvmRef
+					phiList = tail
+				end
+				
+				i = i + 1
+			end
+			
+			LLVMAddIncoming(llvmPHI, values, bbs, count)
+		end
+	end
 end
 
 function GetDbgLoc(dbg:DebugLoc):SrcLoc
@@ -309,6 +423,14 @@ function LLVMCodegenGetValue(codegen:LLVMCodegen, value:ValueRef):pointer
 		LLVMSetLinkage(globalConstant, LLVMPrivateLinkage())
 		LLVMSetInitializer(globalConstant, initializer)
 		return LLVMConstBitCast(globalConstant, LLVMPointerType(LLVMInt8TypeInContext(llvm), 0))
+	case ConstBool(val, type)
+		var num:i32
+		if val then
+			num = 1
+		else
+			num = 0
+		end
+		return LLVMConstInt_wrap(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), num, true)
 	case other
 		WriteLn("ValueRef not implemented")
 		Exit(1)
@@ -350,6 +472,34 @@ function LLMVCodegenBasicBlocks(codegen:LLVMCodegen, blocks:BasicBlockList)
 	end
 end
 
+function count_values(args:ValueRefList):i32
+	match args
+	case Nil return 0
+	case Cons(arg, tail) return 1 + count_values(tail)
+	end
+end
+
+function count_phi(phi:PHIList):i32
+	match phi
+	case Nil return 0
+	case Cons(p, q, tail) return 1 + count_phi(tail)
+	end
+end
+
+adt Args
+	Args(count:i32, array:pointer[])
+end
+
+function LLVMCodegenPredicate(codegen:LLVMCodegen, cmp:Comparison):i32
+	match cmp
+	case EQ return 32 
+	case NE return 33
+	case LT return 40
+	case LE return 41
+	case GT return 38
+	case GE return 39
+	end
+end
 
 function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 	LLVMPositionBuilderAtEnd(codegen.builder, bb.llvmRef)
@@ -375,9 +525,10 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			instr.llvmRef = val
 		case WriteGlobal(global_, value)
 			var globalVar = LLVMCodegenGlobalDecl(codegen, global_)
-			LLVMBuildStore(codegen.builder, globalVar, LLVMCodegenGetValue(codegen, value))
+			LLVMBuildStore(codegen.builder, LLVMCodegenGetValue(codegen, value), globalVar)
 		case Unreachable
 			LLVMBuildUnreachable(codegen.builder)
+			return
 		case Return(value)
 			var type = ValueRefGetType(value)
 			if IsVoidType(type) then
@@ -387,17 +538,86 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 				
 				LLVMBuildRet(codegen.builder, value)
 			end
+			return
 		case Jump(bb_ref)
 			LLVMBuildBr(codegen.builder, bb_ref.llvmRef)
+			return
 		case CondJump(value, bbTrue, bbFalse)
 			var cond = LLVMCodegenGetValue(codegen, value)
 			LLVMBuildCondBr(codegen.builder, cond, bbTrue.llvmRef, bbFalse.llvmRef)
+			return
+		case PHI(phi)			
+			var llvmPHI = LLVMBuildPhi(codegen.builder, LLVMCodegenType(codegen, GetDbgLoc(instr.dbg), instr.type), "")
+			
+			codegen.latePhi = LatePHIList.Cons(llvmPHI, phi, codegen.latePhi)
+			
+			instr.llvmRef = llvmPHI
+		case CallIntrinsic(intrin, args)
+			match LLVMCodegenValues(codegen, args)
+			case Args(argCount, argArray)
+				match intrin
+				case Arith(op)
+					match op
+					case Plus
+						instr.llvmRef = LLVMBuildAdd(codegen.builder, argArray[0], argArray[1], "")
+					case Minus
+						instr.llvmRef = LLVMBuildSub(codegen.builder, argArray[0], argArray[1], "")
+					case Divide
+						instr.llvmRef = LLVMBuildSDiv(codegen.builder, argArray[0], argArray[1], "")
+					case Multiply
+						instr.llvmRef = LLVMBuildMul(codegen.builder, argArray[0], argArray[1], "")
+					end
+				case StringConcat
+					instr.llvmRef = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringConcat), argArray, argCount, "")
+				case CompareBool(cmp)
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), argArray[0], argArray[1], "")
+				case CompareI32(cmp)
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), argArray[0], argArray[1], "")
+				case ComparePointer(cmp)
+					var diff = LLVMBuildPtrDiff(codegen.builder, argArray[0], argArray[1], "")
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+				case CompareString(cmp)
+					var diff = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringCmp), argArray, argCount, "")
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+				case other
+					LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "intrinsic not implemented")
+				end
+			end
+		case CallFunction(fun, args)
+			var llvmFun = LLVMCodegenFunctionDecl(codegen, fun)
+			
+			match LLVMCodegenValues(codegen, args)
+			case Args(argCount, argArray)
+				instr.llvmRef = LLVMBuildCall(codegen.builder, llvmFun, argArray, argCount, "")
+			end
 		case other
 			LLVMCodegenError(codegen, GetDbgLoc(instr.dbg), "instruction not implemented")
 		end
 		
 		i = i + 1
 	end
+	
+	if LLVMGetBasicBlockTerminator(bb.llvmRef) == Null() then
+		LLVMBuildUnreachable(codegen.builder)
+	end
+end
+
+function LLVMCodegenValues(codegen:LLVMCodegen, args:ValueRefList):Args
+	var argCount = count_values(args)
+	var argArray = new pointer[argCount]
+	var argList = args
+	
+	var i = 0
+	while i < argCount do
+		match argList
+		case Cons(arg, tail)
+			argArray[i] = LLVMCodegenGetValue(codegen, arg)
+			argList = tail
+		end
+		i = i + 1
+	end
+	
+	return Args.Args(argCount, argArray)
 end
 
 function LLVMCodegenGetArgumentValue(codegen:LLVMCodegen, param:IRParam):pointer

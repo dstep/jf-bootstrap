@@ -102,7 +102,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATION;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>include;D:\work\LLVM\llvm-src\include;D:\work\LLVM\llvm-build\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\runtime\include;D:\work\LLVM\llvm-src\include;D:\work\LLVM\llvm-build\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -141,7 +141,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATION;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>include;D:\work\LLVM\llvm-src\include;D:\work\LLVM\llvm-build\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\runtime\include;D:\work\LLVM\llvm-src\include;D:\work\LLVM\llvm-build\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -162,8 +162,9 @@
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4715</DisableSpecificWarnings>
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4715</DisableSpecificWarnings>
     </ClCompile>
-    <ClCompile Include="src\jellyfish.c" />
-    <ClCompile Include="src\prelude.c" />
+    <ClCompile Include="..\runtime\src\jellyfish.c" />
+    <ClCompile Include="..\runtime\src\prelude.c" />
+    <ClCompile Include="entry.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\dirent.h" />
@@ -181,16 +182,23 @@
     <None Include="..\compiler\main\src\ast_expr.jf" />
     <None Include="..\compiler\main\src\ast_stmt.jf" />
     <None Include="..\compiler\main\src\ast_type.jf" />
+    <None Include="..\compiler\main\src\bytecode.jf" />
+    <None Include="..\compiler\main\src\bytecode_builder.jf" />
+    <None Include="..\compiler\main\src\bytecode_compiler.jf" />
     <None Include="..\compiler\main\src\compiler.jf" />
     <None Include="..\compiler\main\src\ir.jf" />
     <None Include="..\compiler\main\src\ir_builder.jf" />
     <None Include="..\compiler\main\src\ir_compiler.jf" />
     <None Include="..\compiler\main\src\lexer.jf" />
     <None Include="..\compiler\main\src\llvm.jf" />
+    <None Include="..\compiler\main\src\llvm_codegen.jf" />
     <None Include="..\compiler\main\src\main.jf" />
     <None Include="..\compiler\main\src\parser.jf" />
     <None Include="..\compiler\main\src\prelude.jf" />
     <None Include="..\compiler\main\src\token.jf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\compiler\main\src\parser_test.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

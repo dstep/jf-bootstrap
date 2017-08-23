@@ -32,8 +32,54 @@ adt ScopeBinding
 	Binding(name:string, ref:LocalRef, next:ScopeBinding)
 end
 
+adt Termination
+	Always
+	Maybe
+	Never
+end
+
+function TerminationConcat(first:Termination, second:Termination):Termination
+	match first
+	case Always return first
+	case Maybe
+		match second
+		case Always return second
+		case Maybe return second
+		case Never return first
+		end
+	case Never return second
+	end
+end
+
+function TerminationChoice(left:Termination, right:Termination):Termination
+	match left
+	case Always 
+		match right
+		case Always
+			return right
+		case Maybe
+			return right
+		case Never
+			return Termination.Maybe
+		end
+	case Maybe
+		return left
+	case Never 
+		match right
+		case Always
+			return Termination.Maybe
+		case Maybe
+			return right
+		case Never
+			return right
+		end
+	end
+end
+
 adt Scope
 	New
+	
+	field termination:Termination
 	
 	field parent:Scope
 	field binding:ScopeBinding
@@ -57,6 +103,14 @@ end
 
 function BCCompile(context:CompilerContext)
 	BCCompileUnits(context, context.units)
+end
+
+function ScopeConcat(first:Scope, second:Scope)
+	first.termination = TerminationConcat(first.termination, second.termination)
+end
+
+function ScopeChoice(left:Scope, right:Scope)
+	left.termination = TerminationChoice(left.termination, right.termination)
 end
 
 function BCCompileUnits(context:CompilerContext, units:IRCompilationUnitList)
@@ -155,13 +209,36 @@ function BCCompileFunction(bc:BCCompiler, fun:IRFunctionDecl)
 		var frame = FunctionFrameCreate()
 		block.frame = frame
 		BCEnterFrame(bc, frame)		
-		BCCompilerEnterScope(bc)
+		
+		var scope = BCCompilerEnterScope(bc)
 		
 		BCInjectParameters(bc, fun, frame)
 		
 		BCCompileCode(bc, block.ast)
 		BCCompilerLeaveScope(bc)	
 		BCLeaveFrame(bc)
+		
+		match scope.termination
+		case Always 
+			--do nothing
+		case other
+			var returningUnit = false
+			match bc.retTy
+			case Prim(prim)
+				match prim
+				case Unit
+					returningUnit = true
+				end
+			end
+
+			if returningUnit then
+				BCBuilderReturn(bc.builder, ValueRef.ConstUnit)
+			else
+				BCCompilerError(bc, fun.symbol.loc, "control reaches the end of non-unit function")
+			end
+		end
+		
+		
 		
 		BCLeaveFunction(bc)
 	end
@@ -189,6 +266,7 @@ function BCCompilerEnterScope(bc:BCCompiler):Scope
 	var scope = Scope.New
 	scope.parent = bc.scope
 	scope.binding = ScopeBinding.Nil
+	scope.termination = Termination.Never
 	bc.scope = scope
 	return scope
 end
@@ -250,6 +328,11 @@ function BCResolveType(bc:BCCompiler, ast:AstType):IRType
 end
 
 function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
+	match bc.scope.termination
+	case Always
+		BCCompilerError(bc, ast.loc, "dead code")
+	end
+
 	match ast 
 	case Var(name, m_type, m_init)
 		var varType:IRType
@@ -303,6 +386,64 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 		case other
 			BCCompilerError(bc, ast.loc, "reference type is not implemented")
 		end
+	case While(cond, body)		
+		var condBlock = BasicBlockCreate(bc.frame)
+		var bodyBlock = BasicBlockCreate(bc.frame)
+		var joinBlock = BasicBlockCreate(bc.frame)
+		
+		var loopScope = BCCompilerEnterScope(bc)
+		
+		BCBuilderJump(bc.builder, condBlock)
+		
+		BCBuilderSetInsertPoint(bc.builder, condBlock)		
+		var val = BCCompileExprAs(bc, cond, IRType.Prim(IRPrimType.Bool))
+		match val
+		case ConstBool(b, type)
+			if b then
+				BCBuilderJump(bc.builder, bodyBlock)
+				var bodyScope = BCCompilerEnterScope(bc)
+				BCBuilderSetInsertPoint(bc.builder, bodyBlock)	
+				BCCompileCode(bc, body)
+				BCCompilerLeaveScope(bc)
+				BCBuilderJump(bc.builder, condBlock)
+				
+				ScopeConcat(loopScope, bodyScope)
+				ScopeConcat(loopScope, loopScope)
+				BCCompilerLeaveScope(bc)
+				
+				bc.scope.termination = Termination.Always
+			else
+				BCBuilderJump(bc.builder, joinBlock)
+				BCCompilerLeaveScope(bc)
+				
+				var bodyScope = BCCompilerEnterScope(bc)
+				BCBuilderSetInsertPoint(bc.builder, bodyBlock)	
+				BCCompileCode(bc, body)
+				BCCompilerLeaveScope(bc)
+			end
+		case other
+			BCBuilderCondJump(bc.builder, val, bodyBlock, joinBlock)
+			
+			var bodyScope = BCCompilerEnterScope(bc)
+			BCBuilderSetInsertPoint(bc.builder, bodyBlock)	
+			BCCompileCode(bc, body)
+			BCCompilerLeaveScope(bc)
+			BCBuilderJump(bc.builder, condBlock)
+			
+			var skipScope = BCCompilerEnterScope(bc)
+			BCCompilerLeaveScope(bc)
+			
+			ScopeChoice(bodyScope, skipScope)
+			ScopeConcat(loopScope, bodyScope)
+			ScopeChoice(skipScope, loopScope)
+			ScopeConcat(loopScope, skipScope)
+			
+			BCCompilerLeaveScope(bc)
+		end
+		
+		ScopeConcat(bc.scope, loopScope)
+			
+		BCBuilderSetInsertPoint(bc.builder, joinBlock)	
 	case If(cond, then_, else_)
 		var val = BCCompileExprAs(bc, cond, IRType.Prim(IRPrimType.Bool))
 		
@@ -313,19 +454,22 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 		BCBuilderCondJump(bc.builder, val, thenBlock, elseBlock)
 		
 		BCBuilderSetInsertPoint(bc.builder, thenBlock)		
-		BCCompilerEnterScope(bc)
+		var thenScope = BCCompilerEnterScope(bc)
 		BCCompileStmt(bc, then_)
 		BCCompilerLeaveScope(bc)
 		BCBuilderJump(bc.builder, joinBlock)
 		
 		BCBuilderSetInsertPoint(bc.builder, elseBlock)
-		BCCompilerEnterScope(bc)
+		var elseScope = BCCompilerEnterScope(bc)
 		match else_
 		case Just(stmt)
 			BCCompileStmt(bc, stmt)
 		end
 		BCCompilerLeaveScope(bc)
 		BCBuilderJump(bc.builder, joinBlock)
+		
+		ScopeChoice(thenScope, elseScope)
+		ScopeConcat(bc.scope, thenScope)
 		
 		BCBuilderSetInsertPoint(bc.builder, joinBlock)
 	case Ret(m_expr)
@@ -337,11 +481,16 @@ function BCCompileStmt(bc:BCCompiler, ast:AstStmt)
 			value = BCCompileExprAs(bc, expr, bc.retTy)
 		end
 		Loc(bc, ast.loc)
+		
+		bc.scope.termination = Termination.Always
+		
 		BCBuilderReturn(bc.builder, value)
 	case Block(stmts)
-		BCCompilerEnterScope(bc)
+		var scope = BCCompilerEnterScope(bc)
 		BCCompileCode(bc, stmts)
 		BCCompilerLeaveScope(bc)
+		
+		ScopeConcat(bc.scope, scope)
 	case other
 		BCCompilerError(bc, ast.loc, "statement is not implemented")
 	end
@@ -370,6 +519,26 @@ function BCCompileWritableReference(bc:BCCompiler, ast:AstExpr):WritableReferenc
 	end
 end
 
+function BCCompileCallableReference(bc:BCCompiler, ast:AstExpr, m_ret_type:MaybeIRType):CallableRef
+	Loc(bc, ast.loc)
+	match ast
+	case Id(id)
+		var ref = BCCompilerResolveRef(bc, ast.loc, id)
+		match ref
+		case Global(symbol)
+			match symbol
+			case Function(fun)
+				return CallableRef.Function(fun)
+			case other
+				BCCompilerError(bc, ast.loc, "calling this symbol reference is not implemented")
+			end
+		case other
+			BCCompilerError(bc, ast.loc, "calling this reference is not implemented")
+		end
+	case other BCCompilerError(bc, ast.loc, "expression is not implemented as a callable reference")
+	end
+end
+
 function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 	Loc(bc, ast.loc)
 	match ast
@@ -380,6 +549,12 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 		var str = DecodeStr(content)
 		return ValueRef.ConstString(str, IRType.Prim(IRPrimType.String))
 	case Id(id)
+		if id == "true" then
+			return ValueRef.ConstBool(true, IRType.Prim(IRPrimType.Bool)) 
+		elif id == "false" then
+			return ValueRef.ConstBool(false, IRType.Prim(IRPrimType.Bool)) 
+		end
+		
 		var ref = BCCompilerResolveRef(bc, ast.loc, id)
 		match ref
 		case Value(val)
@@ -396,7 +571,159 @@ function BCCompileExpr(bc:BCCompiler, ast:AstExpr, m_type:MaybeIRType):ValueRef
 		case other
 			BCCompilerError(bc, ast.loc, "reading this reference is not implemented")
 		end
+	case BinOp(lhs, op, rhs)
+		var opId:i32 = 0
+		match op
+		case CmpEQ opId = 1
+		case CmpNE opId = 1
+		case CmpLT opId = 1
+		case CmpGT opId = 1
+		case CmpLE opId = 1
+		case CmpGE opId = 1
+		
+		case Plus opId = 2
+		case Divide opId = 3
+		case Multiply opId = 3
+		case Minus opId = 3
+		
+		case And opId = 4
+		case Or opId = 5
+		end
+		
+		if opId >= 1 and opId <= 3 then
+			var lExpr = BCCompileExprNoHint(bc, lhs)
+			var rExpr = BCCompileExprNoHint(bc, rhs)
+			var commonType = BCCompileUnifyTypes(bc, ast.loc, ValueRefGetType(lExpr), ValueRefGetType(rExpr))
+			lExpr = BCCompileCoerce(bc, lhs.loc, lExpr, commonType)
+			rExpr = BCCompileCoerce(bc, rhs.loc, rExpr, commonType)
+			
+			if opId == 1 then
+				--comparison allowed for bool, i32, string, pointer, and adt
+				var cmpOp:Comparison
+				
+				match op
+				case CmpEQ cmpOp = Comparison.EQ
+				case CmpNE cmpOp = Comparison.NE
+				case CmpLT cmpOp = Comparison.LT
+				case CmpGT cmpOp = Comparison.GT
+				case CmpLE cmpOp = Comparison.LE
+				case CmpGE cmpOp = Comparison.GE
+				end
+				
+				var intrinsic:Intrinsic
+				var ok:bool = false
+				
+				match commonType
+				case Prim(type)
+					match type
+					case Bool
+						ok = true
+						intrinsic = Intrinsic.CompareBool(cmpOp)
+					case I32
+						ok = true
+						intrinsic = Intrinsic.CompareI32(cmpOp)
+					case String
+						ok = true
+						intrinsic = Intrinsic.CompareString(cmpOp)
+					case Pointer
+						ok = true
+						intrinsic = Intrinsic.ComparePointer(cmpOp)
+					end
+				end
+				
+				if ok then
+					return BCBuilderCallIntrinsic(bc.builder, intrinsic, ValueRefList.Cons(lExpr, ValueRefList.Cons(rExpr, ValueRefList.Nil)), IRType.Prim(IRPrimType.Bool))
+				end
+			elif opId == 2 then	
+				--plus allowed for string
+				match commonType
+				case Prim(type)
+					match type
+					case String
+						return BCBuilderCallIntrinsic(bc.builder, Intrinsic.StringConcat, ValueRefList.Cons(lExpr, ValueRefList.Cons(rExpr, ValueRefList.Nil)), commonType)
+					end
+				end
+			end
+			if opId == 2 or opId == 3 then
+				--airth allowed for i32
+				match commonType
+				case Prim(type)
+					match type
+					case I32
+						var intrinsic:Intrinsic
+						match op
+						case Plus intrinsic = Intrinsic.Arith(ArithOp.Plus)
+						case Minus intrinsic = Intrinsic.Arith(ArithOp.Minus)
+						case Divide intrinsic = Intrinsic.Arith(ArithOp.Divide)
+						case Multiply intrinsic = Intrinsic.Arith(ArithOp.Multiply)
+						end
+						return BCBuilderCallIntrinsic(bc.builder, intrinsic, ValueRefList.Cons(lExpr, ValueRefList.Cons(rExpr, ValueRefList.Nil)), commonType)
+					end
+				end
+			end
+		elif opId == 4 or opId == 5 then
+			var boolTy = IRType.Prim(IRPrimType.Bool)
+			
+			var lExpr = BCCompileExprAs(bc, lhs, boolTy)
+			var secondBlock = BasicBlockCreate(bc.frame)
+			var joinBlock = BasicBlockCreate(bc.frame)
+			var currentBlock = bc.builder.bb
+			
+			if opId == 4 then
+				BCBuilderCondJump(bc.builder, lExpr, secondBlock, joinBlock)
+			else
+				BCBuilderCondJump(bc.builder, lExpr, joinBlock, secondBlock)
+			end
+			
+			BCBuilderSetInsertPoint(bc.builder, secondBlock)
+			var rExpr = BCCompileExprAs(bc, lhs, boolTy)
+			BCBuilderJump(bc.builder, joinBlock)
+			
+			BCBuilderSetInsertPoint(bc.builder, joinBlock)
+			
+			var phi0 = PHIList.Nil		
+			var phi1 = PHIList.Cons(currentBlock, ValueRef.ConstBool(opId == 4, boolTy), phi0)
+			var phi2 = PHIList.Cons(secondBlock, rExpr, phi1)
+			
+			return BCBuilderPHI(bc.builder, boolTy, phi2)
+		end
+		
+		BCCompilerError(bc, ast.loc, "operator not implemented")
+	case Call(head, args)
+		var head_val = BCCompileCallableReference(bc, head, m_type)
+		var type = CallableRefGetType(head_val)
+		match type
+		case Function(retTy, params)
+			var args = BCCompileArgs(bc, ast.loc, args, params)
+			match head_val
+			case Function(fun)
+				return BCBuilderCallFunction(bc.builder, fun, args, retTy)
+			case other
+				BCCompilerError(bc, head.loc, "callable ref not implemented")
+			end
+		case other
+			BCCompilerError(bc, head.loc, "is not a callable type")
+		end
 	case other BCCompilerError(bc, ast.loc, "expression not implemented")
+	end
+end
+
+function BCCompileArgs(bc:BCCompiler, loc:SrcLoc, args:AstExprList, params:IRTypeList):ValueRefList
+	while true do
+		match args
+		case Nil 
+			match params 
+			case Nil return ValueRefList.Nil
+			case Cons(ty, ps)
+				BCCompilerError(bc, loc, "not enough arguments")
+			end			
+		case Cons(arg, tail) 
+			match params 
+			case Nil BCCompilerError(bc, arg.loc, "too many arguments")
+			case Cons(ty, ps)
+				return ValueRefList.Cons(BCCompileExprAs(bc, arg, ty), BCCompileArgs(bc, loc, tail, ps))
+			end			
+		end
 	end
 end
 
@@ -445,9 +772,18 @@ function BCCompileCoerce(bc:BCCompiler, loc:SrcLoc, val:ValueRef, targetType:IRT
 	var actualType = ValueRefGetType(val)
 	var coerce = BCCompileFindCoerce(bc, actualType, targetType)
 	match coerce
-	case None BCCompilerError(bc, loc, "can't coerce type")
+	case None 
+		BCCompilerError(bc, loc, "can't coerce type")
 	case ID return val
 	case other BCCompilerError(bc, loc, "coercion not implemented")
+	end
+end
+
+function BCCompileUnifyTypes(bc:BCCompiler, loc:SrcLoc, leftTy:IRType, rightTy:IRType):IRType
+	var coerce = BCCompileFindCoerce(bc, leftTy, rightTy)
+	match coerce
+	case ID return leftTy		
+	case other BCCompilerError(bc, loc, "types are not unifiable")
 	end
 end
 

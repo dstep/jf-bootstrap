@@ -93,6 +93,14 @@ function IRCompileFunction(compiler:IRCompiler, fun:IRFunctionDecl)
 	IRCompileParamList(compiler, fun.params)
 	IRCompileTypeNode(compiler, fun.retTy)
 	
+	fun.type = IRType.Function(fun.retTy.type, IRCompileParamListToTypeList(compiler, fun.params))
+end
+
+function IRCompileParamListToTypeList(compiler:IRCompiler, params:IRParamList):IRTypeList
+	match params
+	case Nil return IRTypeList.Nil
+	case Cons(param, tail) return IRTypeList.Cons(param.type.type, IRCompileParamListToTypeList(compiler, tail))
+	end
 end
 
 function IRCompileADTConstructors(compiler:IRCompiler, cons:IRADTConsList)

@@ -51,6 +51,24 @@ function BCBuilderReadGlobal(builder:BCBuilder, global_:IRGlobalDecl):ValueRef
 	return ins.value
 end
 
+function BCBuilderCallFunction(builder:BCBuilder, fun:IRFunctionDecl, args:ValueRefList, type:IRType):ValueRef
+	var ins = Instruction.CallFunction(fun, args)
+	BCBuilderInsert(builder, ins, type)
+	return ins.value
+end
+
+function BCBuilderCallIntrinsic(builder:BCBuilder, intr:Intrinsic, args:ValueRefList, type:IRType):ValueRef
+	var ins = Instruction.CallIntrinsic(intr, args)
+	BCBuilderInsert(builder, ins, type)
+	return ins.value
+end
+
+
+function BCBuilderPHI(builder:BCBuilder, type:IRType, phi:PHIList):ValueRef
+	var ins = Instruction.PHI(phi)
+	BCBuilderInsert(builder, ins, type)
+	return ins.value
+end
 
 function BCBuilderReturn(builder:BCBuilder, val:ValueRef)
 	BCBuilderInsert(builder, Instruction.Return(val), IRType.Prim(IRPrimType.Unit))

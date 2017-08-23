@@ -6,6 +6,7 @@ adt ValueRef
 	Instr(instr:Instruction)
 	ConstNum(val:i32, type:IRType)
 	ConstString(val:string, type:IRType)
+	ConstBool(val:bool, type:IRType)
 	ConstUnit
 end
 
@@ -17,6 +18,10 @@ end
 adt WritableReference
 	Variable(var_:Variable)
 	Global(global_:IRGlobalDecl)
+end
+
+adt CallableRef
+	Function(fun:IRFunctionDecl)
 end
 
 adt DebugLoc
@@ -65,13 +70,44 @@ adt BasicBlock
 	field llvmRef:pointer
 end
 
+adt PHIList
+	Nil
+	Cons(bb:BasicBlock, value:ValueRef, tail:PHIList)
+end
+
+adt ArithOp
+	Plus
+	Minus
+	Divide
+	Multiply
+end
+
+adt Comparison
+	EQ
+	NE
+	LE
+	LT
+	GE
+	GT
+end
+
+adt Intrinsic
+	Arith(op:ArithOp)
+	CompareBool(op:Comparison)
+	CompareI32(op:Comparison)
+	CompareString(op:Comparison)
+	ComparePointer(op:Comparison)
+	StringConcat
+end
 
 adt Instruction
 	WriteVariable(var_:Variable, value:ValueRef)
 	ReadVariable(var_:Variable) 
-	CallGlobal(fun:IRFunctionDecl, args:ValueRefList)
+	CallFunction(fun:IRFunctionDecl, args:ValueRefList)
+	CallIntrinsic(intrinsic:Intrinsic, args:ValueRefList)
 	ReadGlobal(global_:IRGlobalDecl)
 	WriteGlobal(global_:IRGlobalDecl, value:ValueRef)
+	PHI(phi:PHIList)
 	
 	Unreachable
 	Jump(target:BasicBlock)
@@ -137,8 +173,20 @@ function ValueRefGetType(value:ValueRef):IRType
 		return ty
 	case ConstUnit
 		return IRType.Prim(IRPrimType.Unit)
+	case ConstBool(b, ty)
+		return ty
 	case other
 		WriteLn("value ref not implemented")
+		Exit(1)
+	end
+end
+
+function CallableRefGetType(value:CallableRef):IRType
+	match value
+	case Function(fun)
+		return fun.type
+	case other
+		WriteLn("callable ref not implemented")
 		Exit(1)
 	end
 end

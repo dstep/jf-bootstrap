@@ -21,13 +21,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\jellyfish.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\out\program.c">
       <Filter>Source Files\gen</Filter>
     </ClCompile>
-    <ClCompile Include="src\prelude.c">
+    <ClCompile Include="..\runtime\src\jellyfish.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\runtime\src\prelude.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="entry.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -85,5 +88,22 @@
     <None Include="..\compiler\main\src\token.jf">
       <Filter>Jellyfish</Filter>
     </None>
+    <None Include="..\compiler\main\src\bytecode.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\bytecode_builder.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\bytecode_compiler.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+    <None Include="..\compiler\main\src\llvm_codegen.jf">
+      <Filter>Jellyfish</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\compiler\main\src\parser_test.txt">
+      <Filter>Jellyfish</Filter>
+    </Text>
   </ItemGroup>
 </Project>
