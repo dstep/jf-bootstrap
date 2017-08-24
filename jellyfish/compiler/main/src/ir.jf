@@ -213,6 +213,7 @@ adt SourceFileRef
 	field basename:string
 	field suffix:string
 	field path:string
+	field filename:string
 end
 
 adt IRSourceFile

@@ -36,6 +36,9 @@ adt LLVMCodegen
 	field latePhi:LatePHIList
 	
 	field adts:LLVMADTList
+	field di:pointer
+	
+	field diCU:pointer
 end
 
 adt LLVMADT
@@ -153,13 +156,19 @@ function LLVMCodegenFile(context:CompilerContext, file:IRSourceFile)
 	end
 	
 	codegen.module = LLVMModuleCreateWithNameInContext(fullName, llvm)
+	codegen.di = LLVMCreateDIBuilder(codegen.module, true)
+	
+	var diFile = LLVMDICreateFile(codegen.di, file.file.filename, file.file.dir, 0, "")
+	
+	codegen.diCU = LLVMDICreateCompileUnit(codegen.di, 2, diFile, "Jellyfish Compiler", false, "", 0, "", 1, 0, false, false)
 	
 	LLVMCodegenSymbols(codegen, file.symbols)
 	
 	var moduleString = LLVMPrintModuleToString(codegen.module)
-	
 	var filePath = context.output + "/" + fullName + ".ll"
-	WriteFile(filePath, moduleString)
+	LLVMWriteBitcodeToFile(codegen.module, filePath)
+	
+	WriteFile(filePath + ".txt", moduleString)
 	
 	WriteLn("--- Leaving " + file.file.path + " ---")
 end

@@ -199,6 +199,10 @@ jf_pointer LLVMConstInt_wrap(jf_pointer type, jf_i32 n, jf_bool signExtended){
 	return LLVMConstInt(type, n, signExtended);
 }
 
+LLVMMetadataRef LLVMDICreateCompileUnit_wrapper(LLVMDIBuilderRef Builder, unsigned Lang, LLVMMetadataRef File, const char* Producer, LLVMBool IsOptimized, const char* Flags, unsigned RV, const char* SplitName, LLVMDebugEmissionKind Kind, jf_i32 DWOId, LLVMBool SplitDebugInlining, LLVMBool DebugInfoForProfiling){
+	return LLVMDICreateCompileUnit(Builder, Lang, File, Producer, IsOptimized, Flags, RV, SplitName, Kind, DWOId, SplitDebugInlining, DebugInfoForProfiling);
+}
+
 jf_i32 jfprelude_LLVMPrivateLinkage(){
 	return LLVMPrivateLinkage;
 }

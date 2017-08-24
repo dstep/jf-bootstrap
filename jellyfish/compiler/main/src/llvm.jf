@@ -1,7 +1,7 @@
 function LLVMContextCreate():pointer import "LLVMContextCreate"
 function LLVMModuleCreateWithNameInContext(name:string, content:pointer):pointer import "LLVMModuleCreateWithNameInContext"
 function LLVMPrintModuleToString(module:pointer):string import "LLVMPrintModuleToString"
-
+function LLVMWriteBitcodeToFile(module:pointer, file:string):i32 import "LLVMWriteBitcodeToFile"
 -- Types
 
 function LLVMPointerType(elementType:pointer, address:i32):pointer import "LLVMPointerType"
@@ -76,6 +76,8 @@ function LLVMBuildInBoundsGEP(builder:pointer, value:pointer, indices:pointer[],
 
 function LLVMBuildSwitch(builder:pointer, val:pointer, def:pointer, numCases:i32):pointer import "LLVMBuildSwitch"
 function LLVMAddCase(switch:pointer, val:pointer, bb:pointer) import "LLVMAddCase"
+
+function LLVMSetCurrentDebugLocation(builder:pointer, loc:pointer) import "LLVMSetCurrentDebugLocation"
 -- Values
 function LLVMTypeOf(value:pointer):pointer import "LLVMTypeOf"
 
@@ -95,3 +97,8 @@ function LLVMConstBitCast(const:pointer, type:pointer):pointer import "LLVMConst
 function LLVMPrivateLinkage():i32 import "jfprelude_LLVMPrivateLinkage"
 
 function LLVMDumpValue(val:pointer) import "LLVMDumpValue"
+
+-- DebugInfo
+function LLVMCreateDIBuilder(module:pointer, allowUnresolved:bool):pointer import "LLVMCreateDIBuilder"
+function LLVMDICreateCompileUnit(builder:pointer, lang:i32, file:pointer, producer:string, optimized:bool, flags:string, rv:i32, splitName:string, emissionKind:i32, dwoid:i32, splitDebugInlining:bool, profiling:bool):pointer import "LLVMDICreateCompileUnit_wrapper"
+function LLVMDICreateFile(builder:pointer, file:string, directory:string, checksumKind:i32, checksum:string):pointer import "LLVMDICreateFile"

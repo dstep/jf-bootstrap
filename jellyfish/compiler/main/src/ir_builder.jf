@@ -29,6 +29,7 @@ function BuildSourceRef(filename:string):SourceFileRef
 	var idx = Max(LastIndexOf(filename, CharCode("/")), LastIndexOf(filename, CharCode("\\")))
 	if idx >= 0 then
 		ref.dir = Substring(filename, 0, idx)
+		ref.filename = Substring(filename, idx + 1, StringLength(filename) - idx - 1)
 		var basename = Substring(filename, idx + 1, StringLength(filename) - idx - 1 - 3) --remove .jf
 		idx = IndexOf(basename, CharCode("."))
 		if idx >= 0 then
