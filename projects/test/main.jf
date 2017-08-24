@@ -1,0 +1,5 @@
+function WriteLn(message:string) import "puts"
+
+function run()
+	WriteLn("Hello, Jellyfish")
+end

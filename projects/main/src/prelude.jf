@@ -1,0 +1,163 @@
+function WriteLn(message:string) 
+	Write(message)
+	Write("\n")
+end
+
+function Write(message:string) import "jfprelude_Write"
+
+function DecodeStr(s:string):string import "jfprelude_DecodeStr"
+function StrToInt(x:string):i32 import "jfprelude_StrToInt"
+function IntToStr(x:i32):string import "jfprelude_IntToStr"
+function CharCode(str:string):i32
+	return CharAt(str, 0)
+end
+function CharAt(str:string, i:i32):i32 import "jfprelude_CharAt"
+function StringLength(str:string):i32 import "jfprelude_StringLength"
+function Substring(str:string, from:i32, length:i32):string import "jfprelude_Substring"
+
+function LoadByte(ptr:pointer, offset:i32):i32 import "jfprelude_LoadByte"
+function LoadString(ptr:pointer, offset:i32, size:i32):string import "jfprelude_LoadString"
+
+function Exit(code:i32):undef import "jfprelude_Exit"
+
+adt FileData
+	None
+	Data(ptr:pointer, size:i32)
+end
+function ReadFile(path:string):FileData import "jfprelude_ReadFile"
+function WriteFile(path:string, content:string) import "jfprelude_WriteFile"
+function RemoveFile(path:string) import "jfprelude_RemoveFile"
+function RemoveDirectory(path:string) import "jfprelude_RemoveDirectory"
+function IsDirectory(path:string):bool import "jfprelude_IsDirectory"
+function Null():pointer import "jfprelude_Null"
+
+adt DirectoryData
+	None
+	Data(files:string[], count:i32)
+end
+function ReadDirectory(path:string):DirectoryData import "jfprelude_ReadDirectory"
+function CreateDirectory(path:string, recursive:bool) import "jfprelude_CreateDirectory"
+
+function RemoveDirectoryRecursively(dirname:string)
+	var dir = ReadDirectory(dirname)		
+	var i = 0
+	match dir
+	case None
+	case Data(entries, count)
+		while i < count do
+			var entry = entries[i]
+			if entry <> "." and entry <> ".." then
+				var fullPath = dirname + "/" + entry
+				if IsDirectory(fullPath) then
+					RemoveDirectoryRecursively(fullPath)
+				else
+					RemoveFile(fullPath)
+				end
+			end
+			i = i + 1
+		end
+	end
+	RemoveDirectory(dirname)
+end
+
+adt CommandLine
+	field args:string[]
+	field count:i32
+end
+function GetCommandLine():CommandLine import "jfprelude_GetCommandLine"
+
+function EndsWith(str:string, endsWith:string):bool
+	var len1 = StringLength(str)
+	var len2 = StringLength(endsWith)
+	if len1 < len2 then
+		return false
+	else
+		return Substring(str, len1 - len2, len2) == endsWith
+	end
+end
+
+function StartsWith(str:string, startsWith:string):bool
+	var len1 = StringLength(str)
+	var len2 = StringLength(startsWith)
+	if len1 < len2 then
+		return false
+	else
+		return Substring(str, 0, len1) == startsWith
+	end
+end
+
+function Max(a:i32, b:i32):i32
+	if a > b then
+		return a
+	else
+		return b
+	end
+end
+
+function GetParentName(path:string):string
+	if EndsWith(path, "/") or EndsWith(path, "\\") then
+		path = Substring(path, 0, StringLength(path) - 1)
+	end
+	var idx = Max(LastIndexOf(path, CharCode("\\")), LastIndexOf(path, CharCode("/")))
+	if idx < 0 then
+		return path + "/."
+	else
+		return Substring(path, 0, idx)
+	end
+end
+
+function IndexOf(str:string, ch:i32):i32
+	var i = 0
+	var n = StringLength(str)
+	while i < n do
+		if CharAt(str, i) == ch then
+			return i
+		end
+		i = i + 1
+	end
+	return 0-1
+end
+
+function LastIndexOf(str:string, ch:i32):i32	
+	var n = StringLength(str)
+	var i = n
+	while i > 0 do
+		i = i - 1
+		if CharAt(str, i) == ch then
+			return i
+		end		
+	end
+	return 0-1
+end
+
+function RightTrim(str:string):string	
+	var n = StringLength(str)
+	var i = n
+	while i >= 0 do
+		var ch = CharAt(str, i)
+		if ch == 10 or ch == 13 or ch == 9 or ch == 32 then
+		else
+			return Substring(str, 0, i)
+		end
+		i = i - 1
+	end
+	return ""
+end
+
+function LeftTrim(str:string):string
+	var i = 0
+	var n = StringLength(str)
+	while i < n do
+		var ch = CharAt(str, i)
+		if ch == 10 or ch == 13 or ch == 9 or ch == 32 then
+		else
+			return Substring(str, i, n - i)
+		end
+		i = i + 1
+	end
+	return ""
+end
+
+function StringTrim(str:string):string
+	return LeftTrim(RightTrim(str))
+end

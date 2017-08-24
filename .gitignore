@@ -3,3 +3,6 @@
 /jellyfish/c_compile/x64
 /jellyfish/out/program.c
 .vs
+__pycache__
+*.pyc
+build/

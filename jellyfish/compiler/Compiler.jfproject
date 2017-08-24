@@ -1,7 +1,0 @@
-{
-	"assemblies" : {
-		"main" : {
-			"module" : "./main"
-		}
-	}
-}

@@ -1,0 +1,54 @@
+import main.llvm
+import main.prelude
+import main.compiler
+
+global Compiler:CompilerContext = CompilerContextCreate()
+
+function run()
+	var cmd = GetCommandLine()
+	if cmd.count <> 4 then
+		WriteLn("usage: <modules> <project> <output>")
+		Exit(1)
+	end
+	
+	var modulesPath = cmd.args[1]
+	var projectPath = cmd.args[2]
+	var outputPath = cmd.args[3]
+	
+	var cc = Compiler
+	cc.outputPath = outputPath
+	cc.modulesPath = modulesPath
+	
+	PrepareOutputDir(cc.outputPath)	
+	CompileProject(Compiler, projectPath)
+end
+
+function ResetDirectory(dirname:string)
+	CreateDirectory(dirname, false)
+	var dir = ReadDirectory(dirname)	
+	match dir
+	case None
+	case Data(entries, count)
+		var i = 0
+		while i < count do
+			var entry = entries[i]
+			if entry <> "." and entry <> ".." then
+				var fullPath = dirname + "/" + entry
+				if IsDirectory(fullPath) then
+					RemoveDirectoryRecursively(fullPath)
+				else
+					RemoveFile(fullPath)
+				end
+			end
+			i = i + 1
+		end
+	end
+end
+	
+function PrepareOutputDir(dirname:string)
+	WriteLn("Preparing output directory: " + dirname)	
+		
+	CreateDirectory(dirname, false)
+	ResetDirectory(dirname + "/ll-bitcode")
+	ResetDirectory(dirname + "/ll-ir")
+end

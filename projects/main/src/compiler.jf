@@ -1,0 +1,179 @@
+import main.ir
+import main.prelude
+
+import main.lexer
+import main.parser
+
+import main.ir_builder
+
+import main.ir_compiler
+
+import main.bytecode_compiler
+
+import main.llvm_codegen
+
+adt CompilerContext
+	New
+	
+	field outputPath:string
+	field modulesPath:string
+	
+	
+	field units:IRCompilationUnitList
+end
+
+function CompilerContextCreate():CompilerContext
+	var cc = CompilerContext.New
+	
+	cc.units = IRCompilationUnitList.Nil
+	
+	return cc
+end
+
+function CompilerGetCompilationUnit(compiler:CompilerContext, name:string):IRCompilationUnit
+	var units = compiler.units
+	while true do
+		match units
+		case Nil 
+			var unit_ = IRCompilationUnitCreate(name)
+			compiler.units = IRCompilationUnitList.Cons(unit_, compiler.units)
+			WriteLn("Added compilation unit " + name)
+			return unit_
+		case Cons(unit_, tail)
+			if unit_.name == name then			
+				return unit_
+			end
+			units = tail
+		end
+	end
+end
+
+function ProcessProjectLine(compiler:CompilerContext, projectDir:string, line:string)
+	
+	var i = 0
+	
+	line = StringTrim(line)
+	var n = StringLength(line)
+	
+	var empty = true
+	
+	while i < n do
+		if CharAt(line, i) == 32 or CharAt(line, i) == 9 then
+		else
+			empty = false
+		end
+		i = i + 1
+	end
+	
+	if empty then
+		WriteLn("empty")
+		return
+	end
+	
+	var idx = IndexOf(line, 32)
+	if idx < 0 then
+		WriteLn("Line '" + line + "' is bad")
+		Exit(1)
+	end
+	
+	var moduleName = StringTrim(Substring(line, 0, idx))
+	var modulePath = StringTrim(Substring(line, idx + 1, n - idx - 1))
+	
+	if StringLength(moduleName) == 0 then
+		WriteLn("missing module name in line '" + line + "'")
+	end
+	if StringLength(modulePath) == 0 then
+		WriteLn("missing module path in line '" + line + "'")
+	end
+	
+	if StartsWith(modulePath, "module:/") then
+		modulePath = compiler.modulesPath + "/" + Substring(modulePath, 8, StringLength(modulePath) - 8)
+	else
+		modulePath = projectDir + "/" + modulePath
+	end
+	
+	WriteLn("Reading '" + moduleName + "' directory: " + modulePath)
+	ProcessDir(compiler, moduleName, "", modulePath)
+end
+
+
+function ProcessDir(compiler:CompilerContext, module:string, unit_prefix:string, dirname:string)
+	var dir = ReadDirectory(dirname)
+
+	match dir
+	case None
+		WriteLn("can't read directory " + dirname)
+		Exit(1)
+	case Data(entries, count)
+		var i = 0
+		while i < count do
+			var entry = entries[i]
+			if EndsWith(entry, ".jf") then
+				ProcessFile(compiler, module, unit_prefix, dirname + "/" + entry)
+			elif IsDirectory(entry) then
+				var new_prefix = unit_prefix
+				if StringLength(unit_prefix) > 0 then
+					unit_prefix = unit_prefix + "." + entry
+				else
+					unit_prefix = entry
+				end
+				ProcessDir(compiler, module, unit_prefix, entry + "/" + dirname)
+			end
+			i = i + 1
+		end
+	end
+end
+
+function ProcessFile(compiler:CompilerContext, module:string, unit_prefix:string, filename:string)	
+	WriteLn("++++ Processing " + filename + " ++++")
+	match ReadFile(filename)
+	case None
+		WriteLn("Can't read file " + filename)
+	case Data(data, size)
+		WriteLn("Read " + IntToStr(size) + " bytes, running lexer...")		
+		var lc = LexerCreate()
+		LexerFeed(lc, filename, data, size)
+		var tokens = LexerRun(lc)
+		WriteLn("Lexing done, running parser...")		
+		var parser = ParserCreate()
+		ParserFeed(parser, filename, tokens)
+		var ast = ParserRun(parser)
+		WriteLn("Parsing done. Building IR...")	
+		var irBuilder = IRBuilderCreate(compiler)
+		IRBuilderProcessFile(irBuilder, module, unit_prefix, filename, ast)
+	end
+	WriteLn("---- Leaving ----")
+end
+
+function ProcessProject(compiler:CompilerContext, path:string)
+	var dir = GetParentName(path)
+
+	WriteLn("Reading project file " + path)
+	match ReadFile(path)
+	case None
+		WriteLn("Can't read project file")
+		Exit(1)
+	case Data(data, size)
+		var begin = 0
+		var i = 0
+		while i <= size do
+			if i == size or LoadByte(data, i) == CharCode("\n") or LoadByte(data, i) == CharCode("\r") then
+				if i > begin then
+					ProcessProjectLine(compiler, dir, LoadString(data, begin, i - begin))
+				end
+				
+				begin = i + 1
+			end
+			i = i + 1
+		end
+	end	
+end
+
+function CompileProject(compiler:CompilerContext, path:string)
+	ProcessProject(compiler, path)	
+	
+	IRCompile(compiler)
+	BCCompile(compiler)
+	
+	RunLLVMCodegen(compiler)
+end
