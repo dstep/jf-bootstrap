@@ -93,7 +93,7 @@ function ProcessProjectLine(compiler:CompilerContext, projectDir:string, line:st
 	end
 	
 	WriteLn("Reading '" + moduleName + "' directory: " + modulePath)
-	ProcessDir(compiler, moduleName, "", modulePath)
+	ProcessDir(compiler, moduleName, "", modulePath + "/src")
 end
 
 

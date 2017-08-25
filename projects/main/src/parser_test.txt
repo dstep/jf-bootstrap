@@ -1,8 +1,0 @@
-function take(lex:LexerContext):i32
-	if ret then		
-		if ret then
-		elif ret then		
-		end
-		
-	end
-end

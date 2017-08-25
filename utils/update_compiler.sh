@@ -8,7 +8,7 @@ if [[ $(git ls-files -m "$root/known_good.exe") ]]; then
 	exit 1
 fi
 
-./selfcheck.sh
+./selfcheck.sh $1
 
 cp "$root/../build/compiler/bin/jfprogram.exe" "$root/known_good.exe"
 
