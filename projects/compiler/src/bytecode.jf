@@ -1,6 +1,6 @@
 import main.ir
 import main.ast
-import main.prelude
+import core.prelude
 
 adt ValueRef
 	Instr(instr:Instruction)

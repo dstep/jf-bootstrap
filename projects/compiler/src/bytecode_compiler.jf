@@ -2,7 +2,7 @@ import main.bytecode
 import main.ir
 import main.compiler
 import main.ast
-import main.prelude
+import core.prelude
 import main.bytecode_builder
 import main.ast_stmt
 import main.ast_expr

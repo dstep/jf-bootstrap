@@ -2,9 +2,19 @@
 
 set -e
 
-compiler_type=$1
 
+if [ $1 = "--run" ]; then
+	run=1
+	shift
+else
+	run=0
+fi
+
+compiler_type=$1
 proj_name=$2
+
+shift
+shift
 
 root="$(dirname "$0")"
 proj_dir="$(readlink -f "$root/../projects")"
@@ -21,3 +31,8 @@ fi
 
 "$CC" "$module_dir" "$proj_path" "$output_dir"
 ./build_ll_to_exe2.sh "$output_dir"
+
+if [ $run = 1 ]; then
+	"$output_dir/bin/jfprogram.exe" $@
+fi
+

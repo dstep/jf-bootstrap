@@ -1,9 +1,9 @@
 import main.compiler
 import main.ir
 import main.bytecode
-import main.llvm
+import llvm.llvm
 import main.ast
-import main.prelude
+import core.prelude
 
 adt ParamToValue
 	Nil

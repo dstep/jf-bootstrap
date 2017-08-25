@@ -3,7 +3,7 @@ import main.ast_stmt
 import main.ast_expr
 import main.ast_type
 import main.token
-import main.prelude
+import core.prelude
 
 adt ParserContext
 	New

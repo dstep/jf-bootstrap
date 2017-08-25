@@ -16,7 +16,6 @@ echo "Phase 2, compiling with a new compiler..."
 echo "Phase 3, recompiling with a new compiler..."
 ./jfc.sh compiler compiler
 echo "Phase 4, running test..."
-./jfc.sh compiler test
-./run.sh test
+./jfc.sh --run compiler test
 
 echo "Self-check successful"

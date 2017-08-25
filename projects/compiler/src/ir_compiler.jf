@@ -1,7 +1,7 @@
 import main.compiler
 import main.ir
 import main.ast
-import main.prelude
+import core.prelude
 
 function IRCompile(context:CompilerContext)
 	IRCompileUnits(context, context.units)

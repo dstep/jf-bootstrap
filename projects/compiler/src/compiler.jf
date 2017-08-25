@@ -1,5 +1,5 @@
 import main.ir
-import main.prelude
+import core.prelude
 
 import main.lexer
 import main.parser
@@ -85,7 +85,7 @@ function ProcessProjectLine(compiler:CompilerContext, projectDir:string, line:st
 		WriteLn("missing module path in line '" + line + "'")
 	end
 	
-	if StartsWith(modulePath, "module:/") then
+	if StartsWith(modulePath, "modules:/") then
 		modulePath = compiler.modulesPath + "/" + Substring(modulePath, 8, StringLength(modulePath) - 8)
 	else
 		modulePath = projectDir + "/" + modulePath

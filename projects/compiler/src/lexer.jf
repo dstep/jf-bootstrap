@@ -1,5 +1,5 @@
 import main.ast
-import main.prelude
+import core.prelude
 import main.token
 
 function BuildKeywordTable():KeywordTable

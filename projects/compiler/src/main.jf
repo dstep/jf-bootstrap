@@ -1,5 +1,5 @@
-import main.llvm
-import main.prelude
+import llvm.llvm
+import core.prelude
 import main.compiler
 
 global Compiler:CompilerContext = CompilerContextCreate()

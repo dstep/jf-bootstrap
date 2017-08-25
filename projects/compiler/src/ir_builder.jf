@@ -4,7 +4,7 @@ import main.ast
 import main.ast_expr
 import main.ast_type
 import main.ast_stmt
-import main.prelude
+import core.prelude
 import main.compiler
 
 adt IRBuilder

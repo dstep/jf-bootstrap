@@ -5,4 +5,6 @@ set -e
 root="$(dirname "$0")"
 prog=$1
 shift
-"$root/../build/$prog/bin/jfprogram.exe" $@ 
+
+"$root/jfc.sh" stable compiler
+"$root/jfc.sh" --run compiler "$prog" "$@"
