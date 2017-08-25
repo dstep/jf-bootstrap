@@ -142,11 +142,7 @@ end
 function BCCompileFile(context:CompilerContext, file:IRSourceFile)
 	var compiler = BCCompilerCreate(context, file)
 	
-	WriteLn("+++ Running bytecode compilation on " + file.file.path + " +++")
-	
 	BCCompileSymbols(compiler, file.symbols)
-	
-	WriteLn("--- Leaving " + file.file.path + " ---")
 end
 
 

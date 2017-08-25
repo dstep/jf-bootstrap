@@ -50,13 +50,9 @@ end
 function IRCompileFile(context:CompilerContext, file:IRSourceFile)
 	var compiler = IRCompilerCreate(context, file)
 	
-	WriteLn("+++ Running IR Compilation on " + file.file.path + " +++")
-	
 	IRResolveImports(compiler, file.imports)
 	
 	IRCompileSymbols(compiler, file.symbols)
-	
-	WriteLn("--- Leaving " + file.file.path + " ---")
 end
 
 function IRCompileSymbols(compiler:IRCompiler, symbols:IRSymbolList)

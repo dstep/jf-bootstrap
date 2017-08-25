@@ -39,8 +39,6 @@ function BuildSourceRef(filename:string):SourceFileRef
 			ref.basename = basename
 			ref.suffix = ""
 		end
-		
-		WriteLn("Compilation unit " + ref.basename + " with suffix " + ref.suffix)
 	else
 		WriteLn("File " + filename + " has invalid path")
 		Exit(1)

@@ -148,8 +148,6 @@ end
 function LLVMCodegenFile(context:CompilerContext, file:IRSourceFile)
 	var codegen = LLVMCodegenCreate(context, file)
 	
-	WriteLn("+++ Running llvm codegen on " + file.file.path + " +++")
-	
 	var fullName = file.unit_.name
 	if file.file.suffix <> "" then
 		fullName = fullName + "@" + file.file.suffix
@@ -171,8 +169,6 @@ function LLVMCodegenFile(context:CompilerContext, file:IRSourceFile)
 	
 	filePath = context.outputPath + "/ll-ir/" + fullName + ".ll"
 	WriteFile(filePath, moduleString)
-	
-	WriteLn("--- Leaving " + file.file.path + " ---")
 end
 
 

@@ -37,7 +37,6 @@ function CompilerGetCompilationUnit(compiler:CompilerContext, name:string):IRCom
 		case Nil 
 			var unit_ = IRCompilationUnitCreate(name)
 			compiler.units = IRCompilationUnitList.Cons(unit_, compiler.units)
-			WriteLn("Added compilation unit " + name)
 			return unit_
 		case Cons(unit_, tail)
 			if unit_.name == name then			
@@ -92,14 +91,17 @@ function ProcessProjectLine(compiler:CompilerContext, projectDir:string, line:st
 		modulePath = projectDir + "/" + modulePath
 	end
 	
-	WriteLn("Reading '" + moduleName + "' directory: " + modulePath)
-	ProcessDir(compiler, moduleName, "", modulePath + "/src")
+	if ProcessDir(compiler, moduleName, "", modulePath + "/src") == 0 then
+		WriteLn("No source files")
+		Exit(1)
+	end
 end
 
 
-function ProcessDir(compiler:CompilerContext, module:string, unit_prefix:string, dirname:string)
+function ProcessDir(compiler:CompilerContext, module:string, unit_prefix:string, dirname:string):i32
 	var dir = ReadDirectory(dirname)
-
+	var sourceFilesFound = 0
+	
 	match dir
 	case None
 		WriteLn("can't read directory " + dirname)
@@ -110,6 +112,7 @@ function ProcessDir(compiler:CompilerContext, module:string, unit_prefix:string,
 			var entry = entries[i]
 			if EndsWith(entry, ".jf") then
 				ProcessFile(compiler, module, unit_prefix, dirname + "/" + entry)
+				sourceFilesFound = sourceFilesFound + 1
 			elif IsDirectory(entry) then
 				var new_prefix = unit_prefix
 				if StringLength(unit_prefix) > 0 then
@@ -117,32 +120,29 @@ function ProcessDir(compiler:CompilerContext, module:string, unit_prefix:string,
 				else
 					unit_prefix = entry
 				end
-				ProcessDir(compiler, module, unit_prefix, entry + "/" + dirname)
+				sourceFilesFound = sourceFilesFound + ProcessDir(compiler, module, unit_prefix, entry + "/" + dirname)
 			end
 			i = i + 1
 		end
 	end
+	
+	return sourceFilesFound
 end
 
 function ProcessFile(compiler:CompilerContext, module:string, unit_prefix:string, filename:string)	
-	WriteLn("++++ Processing " + filename + " ++++")
 	match ReadFile(filename)
 	case None
 		WriteLn("Can't read file " + filename)
 	case Data(data, size)
-		WriteLn("Read " + IntToStr(size) + " bytes, running lexer...")		
 		var lc = LexerCreate()
 		LexerFeed(lc, filename, data, size)
-		var tokens = LexerRun(lc)
-		WriteLn("Lexing done, running parser...")		
+		var tokens = LexerRun(lc)	
 		var parser = ParserCreate()
 		ParserFeed(parser, filename, tokens)
 		var ast = ParserRun(parser)
-		WriteLn("Parsing done. Building IR...")	
 		var irBuilder = IRBuilderCreate(compiler)
 		IRBuilderProcessFile(irBuilder, module, unit_prefix, filename, ast)
 	end
-	WriteLn("---- Leaving ----")
 end
 
 function ProcessProject(compiler:CompilerContext, path:string)
