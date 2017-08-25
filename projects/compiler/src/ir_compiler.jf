@@ -206,7 +206,7 @@ function IRFindGlobalSymbol(compiler:IRCompiler, id:string):IRSymbolList
 	
 	var unit_ = compiler.file.unit_
 	var unitSymbols = IRFindSymbolsInUnit(compiler, unit_, id)
-	if HasAnySymbol(ownSymbols) then
+	if HasAnySymbol(unitSymbols) then
 		return unitSymbols
 	end
 	

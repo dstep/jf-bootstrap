@@ -1,5 +1,9 @@
-function WriteLn(message:string) import "puts"
+import core.prelude
+ 
+function foo():i32
+	return 9
+end
 
 function run()
-	WriteLn("Hello, Jellyfish")
+	WriteLn("Hello, Jellyfish! " + IntToStr(bar()))
 end
