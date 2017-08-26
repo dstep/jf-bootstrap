@@ -2,6 +2,12 @@ import llvm.llvm
 import core.prelude
 import main.compiler
 
+--TODO:
+-- u64/i64 type
+-- remove runtime dependence on llvm
+-- link with lld
+-- continue work on debug info
+
 global Compiler:CompilerContext = CompilerContextCreate()
 
 function run()

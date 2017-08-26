@@ -233,6 +233,10 @@ function IRBuildType(builder:IRBuilder, ast:AstType):IRType
 				return IRType.Prim(IRPrimType.Bool)
 			elif id == "undef" then
 				return IRType.Prim(IRPrimType.Undef)
+			elif id == "i64" then
+				return IRType.Prim(IRPrimType.I64)
+			elif id == "u64" then
+				return IRType.Prim(IRPrimType.U64)
 			else
 				var ref = IRTypeReference.New
 				ref.id = id

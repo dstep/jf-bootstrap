@@ -4,7 +4,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-if [ $1 = "--no-phase1" ]; then
+if [ $1 == "--no-phase1" ]; then
 	echo "Phase 1 skipped"
 else
 	echo "Phase 1, compiling with a stable compiler..."

@@ -245,3 +245,11 @@ jf_CommandLine* jfprelude_GetCommandLine() {
 	data->args = argv;
 	return data;
 }
+
+jf_u64 jfprelude_I32ToU64(jf_i32 x){
+	return x;
+}
+
+jf_i64 jfprelude_I32ToI64(jf_i32 x){
+	return x;
+}

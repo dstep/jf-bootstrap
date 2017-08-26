@@ -158,7 +158,8 @@ adt IRPrimType
 	String
 	Pointer
 	Bool
-	
+	I64
+	U64
 end
 
 function PrimGetTag(prim:IRPrimType):i32

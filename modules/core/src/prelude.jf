@@ -38,6 +38,9 @@ end
 function ReadDirectory(path:string):DirectoryData import "jfprelude_ReadDirectory"
 function CreateDirectory(path:string, recursive:bool) import "jfprelude_CreateDirectory"
 
+function I32ToI64(x:i32):i64 import "jfprelude_I32ToI64"
+function I32ToU64(x:i32):u64 import "jfprelude_I32ToU64"
+
 function RemoveDirectoryRecursively(dirname:string)
 	var dir = ReadDirectory(dirname)		
 	var i = 0

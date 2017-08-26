@@ -83,6 +83,7 @@ global llvmI1Type:pointer = LLVMInt1TypeInContext(llvm)
 global llvmPtrType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmStringType:pointer = LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 global llvmI32Type:pointer = LLVMInt32TypeInContext(llvm)
+global llvmI64Type:pointer = LLVMInt64TypeInContext(llvm)
 
 global llvmNullPtrList:pointer[] = new pointer[1]
 
@@ -319,6 +320,8 @@ function LLVMCodegenType(codegen:LLVMCodegen, loc:SrcLoc, type:IRType):pointer
 		match prim
 		case Unit return LLVMVoidTypeInContext(llvm)
 		case I32 return LLVMInt32TypeInContext(llvm)
+		case I64 return llvmI64Type
+		case U64 return llvmI64Type
 		case String return llvmStringType
 		case Pointer return LLVMPointerType(LLVMInt8TypeInContext(llvm), 0)
 		case Bool return LLVMInt1TypeInContext(llvm)

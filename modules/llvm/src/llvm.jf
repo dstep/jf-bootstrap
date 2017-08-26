@@ -9,6 +9,7 @@ function LLVMPointerType(elementType:pointer, address:i32):pointer import "LLVMP
 function LLVMInt1TypeInContext(context:pointer):pointer import "LLVMInt1TypeInContext"
 function LLVMInt8TypeInContext(context:pointer):pointer import "LLVMInt8TypeInContext"
 function LLVMInt32TypeInContext(context:pointer):pointer import "LLVMInt32TypeInContext"
+function LLVMInt64TypeInContext(context:pointer):pointer import "LLVMInt64TypeInContext"
 
 function LLVMVoidTypeInContext(context:pointer):pointer import "LLVMVoidTypeInContext"
 

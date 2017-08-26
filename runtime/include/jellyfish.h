@@ -2,6 +2,8 @@
 #include <stdint.h>
 
 typedef int32_t jf_i32;
+typedef int64_t jf_i64;
+typedef uint64_t jf_u64;
 typedef const char* jf_string;
 typedef void jf_unit;
 typedef int jf_bool;
