@@ -169,7 +169,9 @@ function PrimGetTag(prim:IRPrimType):i32
 	case String return 2
 	case Pointer return 3
 	case Bool return 4
-	case other WriteLn("prim type not implemented") Exit(1)
+	case I64 return 5
+	case U64 return 6
+	case Undef return 7
 	end
 end
 

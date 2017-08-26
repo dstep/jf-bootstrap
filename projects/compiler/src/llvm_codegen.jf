@@ -159,7 +159,7 @@ function LLVMCodegenFile(context:CompilerContext, file:IRSourceFile)
 	
 	var diFile = LLVMDICreateFile(codegen.di, file.file.filename, file.file.dir, 0, "")
 	
-	codegen.diCU = LLVMDICreateCompileUnit(codegen.di, 2, diFile, "Jellyfish Compiler", false, "", 0, "", 1, 0, false, false)
+	codegen.diCU = LLVMDICreateCompileUnit(codegen.di, 2, diFile, "Jellyfish Compiler", false, "", 0, "", 1, I32ToU64(0), false, false)
 	
 	LLVMCodegenSymbols(codegen, file.symbols)
 
@@ -260,7 +260,7 @@ function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
 	
 	var guard = LLVMAddGlobal(codegen.module, llvmI1Type, "")
 	LLVMSetLinkage(guard, LLVMPrivateLinkage())
-	LLVMSetInitializer(guard, LLVMConstInt_wrap(llvmI1Type, 0, true))
+	LLVMSetInitializer(guard, LLVMConstInt(llvmI1Type, I32ToU64(0), true))
 	
 	var builder = codegen.builder
 	var bb = LLVMAppendBasicBlockInContext(llvm, llvmFun, "entry")
@@ -271,7 +271,7 @@ function LLVMCodegenGlobal(codegen:LLVMCodegen, global_:IRGlobalDecl)
 	LLVMBuildCondBr(builder, guardVal, retBlock, initBlock)
 	
 	LLVMPositionBuilderAtEnd(builder, initBlock)
-	LLVMBuildStore(builder, LLVMConstInt_wrap(llvmI1Type, 1, true), guard)
+	LLVMBuildStore(builder, LLVMConstInt(llvmI1Type, I32ToU64(1), true), guard)
 	var initVal = LLVMBuildCall(builder, LLVMCodegenGlobalInitDecl(codegen, global_), llvmNullPtrList, 0, "")
 	LLVMBuildStore(builder, initVal, llvmDecl)
 	LLVMBuildRetVoid(builder)
@@ -497,7 +497,7 @@ function LLVMCodegenADTConsBody(codegen:LLVMCodegen, cons:IRADTCons)
 	var alloc = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicAlloc), elements, 1, "")
 	var obj = LLVMBuildBitCast(codegen.builder, alloc, LLVMPointerType(llvmCons, 0), "")
 	
-	LLVMBuildStore(codegen.builder, LLVMConstInt_wrap(llvmI32Type, cons.index, true), LLVMBuildStructGEP(codegen.builder, obj, 0, ""))
+	LLVMBuildStore(codegen.builder, LLVMConstInt(llvmI32Type, I32ToU64(cons.index), true), LLVMBuildStructGEP(codegen.builder, obj, 0, ""))
 	
 	var offset = count_fields(cons.owner.fields)
 	var n = count_params(cons.params)
@@ -713,7 +713,7 @@ function LLVMCodegenGetValue(codegen:LLVMCodegen, value:ValueRef):pointer
 	case Instr(instr)
 		return instr.llvmRef
 	case ConstNum(num, type)
-		return LLVMConstInt_wrap(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), num, true)
+		return LLVMConstInt(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), I32ToU64(num), true)
 	case ConstString(str, ty)
 		var initializer = LLVMConstStringInContext(llvm, str, StringLength(str), false)
 		var globalConstant = LLVMAddGlobal(codegen.module, LLVMTypeOf(initializer), "")
@@ -727,7 +727,7 @@ function LLVMCodegenGetValue(codegen:LLVMCodegen, value:ValueRef):pointer
 		else
 			num = 0
 		end
-		return LLVMConstInt_wrap(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), num, true)
+		return LLVMConstInt(LLVMCodegenType(codegen, SrcLoc.At(0,0), type), I32ToU64(num), true)
 	case other
 		WriteLn("ValueRef not implemented")
 		Exit(1)
@@ -908,7 +908,7 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), argArray[0], argArray[1], "")
 				case ComparePointer(cmp)
 					var diff = LLVMBuildPtrDiff(codegen.builder, argArray[0], argArray[1], "")
-					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt(LLVMTypeOf(diff), I32ToU64(0), true), "")
 				case CompareRefEq(cmp)
 					var diff = LLVMBuildPtrDiff(
 						codegen.builder, 
@@ -916,10 +916,10 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 						LLVMBuildBitCast(codegen.builder, argArray[1], llvmPtrType, ""),
 						""
 					)
-					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt(LLVMTypeOf(diff), I32ToU64(0), true), "")
 				case CompareString(cmp)
 					var diff = LLVMBuildCall(codegen.builder, LLVMCodegenGetIntrinsic(codegen, IntrinsicStringCmp), argArray, argCount, "")
-					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt_wrap(LLVMTypeOf(diff), 0, true), "")
+					instr.llvmRef = LLVMBuildICmp(codegen.builder, LLVMCodegenPredicate(codegen, cmp), diff, LLVMConstInt(LLVMTypeOf(diff), I32ToU64(0), true), "")
 				end
 			end
 		case ReadADTField(ptr, field_)
@@ -969,7 +969,7 @@ function LLMVCodegenBasicBlock(codegen:LLVMCodegen, bb:BasicBlock)
 			while i < count do
 				match branchList
 				case Cons(cons, block, tail)
-					LLVMAddCase(switch, LLVMConstInt_wrap(llvmI32Type, cons.index, true), block.llvmRef)
+					LLVMAddCase(switch, LLVMConstInt(llvmI32Type, I32ToU64(cons.index), true), block.llvmRef)
 					branchList = tail
 				end
 				i = i + 1

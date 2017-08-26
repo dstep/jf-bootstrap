@@ -84,7 +84,7 @@ function LLVMTypeOf(value:pointer):pointer import "LLVMTypeOf"
 
 function LLVMAddIncoming(phi:pointer, values:pointer[], bbs:pointer[], count:i32) import "LLVMAddIncoming"
 -- Constants
-function LLVMConstInt_wrap(type:pointer, n:i32, sign:bool):pointer import "LLVMConstInt_wrap"
+function LLVMConstInt(type:pointer, n:u64, sign:bool):pointer import "LLVMConstInt"
 function LLVMConstStringInContext(context:pointer, str:string, length:i32, dontNullTerminate:bool):pointer import "LLVMConstStringInContext"
 function LLVMSizeOf(type:pointer):pointer import "LLVMSizeOf"
 function LLVMConstTrunc(const:pointer, type:pointer):pointer import "LLVMConstTrunc"
@@ -101,5 +101,5 @@ function LLVMDumpValue(val:pointer) import "LLVMDumpValue"
 
 -- DebugInfo
 function LLVMCreateDIBuilder(module:pointer, allowUnresolved:bool):pointer import "LLVMCreateDIBuilder"
-function LLVMDICreateCompileUnit(builder:pointer, lang:i32, file:pointer, producer:string, optimized:bool, flags:string, rv:i32, splitName:string, emissionKind:i32, dwoid:i32, splitDebugInlining:bool, profiling:bool):pointer import "LLVMDICreateCompileUnit_wrapper"
+function LLVMDICreateCompileUnit(builder:pointer, lang:i32, file:pointer, producer:string, optimized:bool, flags:string, rv:i32, splitName:string, emissionKind:i32, dwoid:u64, splitDebugInlining:bool, profiling:bool):pointer import "LLVMDICreateCompileUnit"
 function LLVMDICreateFile(builder:pointer, file:string, directory:string, checksumKind:i32, checksum:string):pointer import "LLVMDICreateFile"
